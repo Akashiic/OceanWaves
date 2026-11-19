@@ -36,13 +36,16 @@ reaproveitados); uma instância por thread de tudo que guarda estado de trabalho
 
 ### 2. Servidor (`server/`, `api/`)
 
-* `ServerSea`: o estado de cada dimensão com ondas (padrão: a 0, da configuração). Manda a quem entra, troca de
+* `ServerSea`: o estado de cada dimensão com ondas. Os mundos vêm de `mar.mundos`, pelo nome da pasta (os do
+  Multiverse ganham número de dimensão só ao carregar, então as ondas ligam no `WorldEvent.Load` e saem no `Unload`)
+  ou pelo número; sem nenhum deles no servidor, o principal. Uma vez por segundo confere se algum jogador trocou de
+  mundo sem os eventos do FML (teleporte de plugin) e manda o mar do novo. Manda a quem entra, troca de
   dimensão ou renasce, e a todos da dimensão quando muda (`MessageSeaState` no canal FML `oceanwaves`).
 * `/ondas` (`/oceanwaves`, `/ow`), operadores: `info`, `estado <nome>`, `vento <m/s> [graus]`, `altura`, `escala`,
   `crista`, `componentes`, `semente`, `aqui` (a superfície, a atenuação, a inclinação, o jacobiano e a velocidade
   da água no ponto do jogador, com o tempo da consulta), `regiao <spawn|aqui|tudo> [raio]`, `ligar`, `desligar`.
   Muda o mar de todos em tempo real.
-* **Região** (`core.SeaRegion`): um círculo (em volta do spawn por padrão, 384 blocos) ou o mundo todo. Uma coluna
+* **Região** (`core.SeaRegion`): o mundo todo (padrão) ou um círculo (em volta do spawn ou de um ponto). Uma coluna
   fora dela não é "mar aberto" para nada: nem para o mixin da face vanilla, nem para o cache do cliente, nem para a
   `shore` da API. Por isso a borda entra no `ShoreField` exatamente como uma costa (a distância até ela e o limite de
   gradiente), e vale a mesma garantia de não dobrar. A região vai no fim da `MessageSeaState` (versão 2; um cliente
@@ -50,7 +53,8 @@ reaproveitados); uma instância por thread de tudo que guarda estado de trabalho
 * `api.OceanWaves`: para mods e plugins Bukkit no Crucible (o jar leva o núcleo; plugin compila `compileOnly`). Só
   tipos do Java e do núcleo nas assinaturas. `state`, `waves`, `setState`, `time` (o tempo total do mundo em
   segundos), `restLevel`, `shore` (a atenuação a partir dos blocos reais e da região), `shoreMargin` (a folga que
-  a atenuação de um retângulo pede em volta dele), `region`, `surfaceY`.
+  a atenuação de um retângulo pede em volta dele), `region`, `surfaceY`, `dimensionOf` (API 2: a dimensão de um
+  mundo pelo nome do Bukkit, para um plugin achar a do mundo onde está).
 
 ### 3. Cliente (`client/`, `mixin/`)
 
@@ -108,8 +112,9 @@ dele que toca no OceanWaves), assim:
    até t + N/20 e mandar essa pose com o deslizamento de N ticks põe navio e onda juntos. O atraso de meia latência
    da rede vale para os dois (o relógio do cliente também vem do servidor), então se cancela.
 4. O vento da banda é o vento do mar (`SeaState.windSpeed/windDirection`), e `/exp vento` muda o do OceanWaves.
-5. Só o mundo principal (dimensão 0) por enquanto, e só com a linha d'água no nível do mar do mod; fora disso o
-   plugin usa o mar próprio dele. Sem o mod no servidor, nada muda no Expeditions.
+5. O mundo do navio vira dimensão por `OceanWaves.dimensionOf(world.getName())`; só nos mundos com ondas e com a
+   linha d'água no nível do mar do mod; fora disso o plugin usa o mar próprio dele. Sem o mod no servidor (ou com a
+   API 1), nada muda no Expeditions.
 
 **[a fazer]** O amortecimento pode usar a velocidade da água (`WaveSample.vx/vy/vz`) em vez da do navio sozinha.
 

@@ -49,6 +49,9 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClie
   `mc_Entity` (`IrisBridge`, por reflexão). O Angelica reescreve o `sortAndRender` e fecha a fase no fim: nada que
   dependa da fase pode ser desenhado depois dele sem o override. Com shaderpack o frustum vanilla não serve (use o
   `ViewCone`) e a passagem de sombra também chama o passe 1 (`ShaderPacks.renderingShadowPass`).
+* **Mundos por nome, não por número**: os mundos do Multiverse (o spawn do TEOF é o `Akashic/Spawn`) ganham a
+  dimensão só ao carregar e podem trocar de número a cada início. A configuração e a API (`dimensionOf`) vão por
+  nome; o cliente aplica o mar ao mundo em que está, mandado pelo servidor a cada troca.
 * **Não conte com os avisos do mundo**: com o Celeritas o `markBlockRangeForRenderUpdate` não chega aos
   `IWorldAccess` registrados. O cache confere por conta própria se um chunk chegou (`OceanChunks.arrived`) e relê em
   rodízio.
