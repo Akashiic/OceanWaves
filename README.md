@@ -44,8 +44,8 @@ O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUI
 | Shaderpacks (BSL, Complementary) | **integrado e visto**: o mar passa pelo programa de água do pack (reflexos, refração, sombra) ([ADR-0004](docs/adr/ADR-0004-shaderpacks.md)) |
 | Mirai, modo de compatibilidade (DragonAPI sem Angelica) | **a verificar** |
 | Desempenho numa placa de vídeo | **a verificar**; sem GPU, 8 chunks: ~8 a 10 ms por quadro no ambiente de desenvolvimento, ~6 a 20 ms no pack real |
-| Mundos com ondas: só os da configuração, pelo nome (padrão: `Akashic/Spawn`, o spawn do servidor), no mundo inteiro | feito; nos outros mundos a água é a vanilla. Opcional: limitar a um círculo (`regiao`), com a borda tratada como costa |
-| Navios do Expeditions nas ondas | feito no Expeditions (branch `claude/minecraft-ocean-physics-mod-n82b79`, `OceanWavesSea`); **visto**: o galeão flutuando no mar do OceanWaves no servidor do Forbidden ([como](docs/ARQUITETURA.md#navios-expeditions)) |
+| Mundos com ondas: só os da configuração, pelo nome (padrão: `Akashic/Spawn`, o spawn do servidor), no mundo inteiro | feito e **visto** no servidor do Forbidden com o cliente TEOF: ondas no `Akashic/Spawn`, água vanilla no `world` ([relatório](docs/TESTES-AMBIENTE-REAL.md)). Opcional: limitar a um círculo (`regiao`), com a borda tratada como costa |
+| Navios do Expeditions nas ondas | feito no Expeditions (branch `claude/minecraft-ocean-physics-mod-n82b79`, `OceanWavesSea`); **visto**: o galeão subindo, caturrando e balançando com as ondas do `Akashic/Spawn` no servidor do Forbidden ([como](docs/ARQUITETURA.md#navios-expeditions)) |
 | Barcos vanilla, entidades, névoa submersa, esteiras, camada GPU | próximas fases |
 
 ## Usar

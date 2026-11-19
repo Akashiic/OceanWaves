@@ -80,6 +80,30 @@ O cliente entrou no servidor (FML aceitou as listas de mods) e o harness conduzi
 |---|---|
 | ![fresta](img/real/teof-mp-fresta-antes.png) | ![tempestade](img/real/teof-mp-tempestade.png) |
 
+### 4. Ondas só no mundo do spawn, e os navios do Expeditions nelas — verificado
+
+O spawn do servidor do TEOF é o mundo do Multiverse `Akashic/Spawn` (gerador `AkashicVoidGenerator`); a pasta dele não
+veio nos arquivos do servidor, então na cópia isolada ela foi montada com as regiões do `world` (o mesmo oceano nos
+dois mundos, para comparar). O Crucible guarda os mundos de plugin dentro do principal: `world/Akashic/Spawn`.
+
+* No servidor: `Loading dimension 2 (Akashic/Spawn)` e, do OceanWaves, `Ondas no mundo Akashic/Spawn (dimensão 2): o
+  mundo todo`; `/ondas info` no `world` responde `Ondas em: Akashic/Spawn (dimensão 2)` e `Sem ondas neste mundo`.
+* Cliente real (harness em multijogador, `/mvtp` entre os mundos): no `world`, `Mar do servidor (dimensão 0): null`,
+  0 componentes, nenhum chunk de mar desenhado, a água vanilla; no `Akashic/Spawn`, o mar do servidor com o resumo
+  igual ao do servidor (`cd20fb5a…` fresco, `958b5fc4…` tempestade); de volta ao `world`, sem ondas de novo. O mar
+  chega a cada troca de mundo.
+* Expeditions (branch `claude/minecraft-ocean-physics-mod-n82b79`): o galeão completo posto no `Akashic/Spawn` usa o
+  mar do OceanWaves (`/exp diag`: `mar do OceanWaves`), com arfagem de −1,32 a −0,01 m, caturro de −3,0° a +2,5° e
+  balanço de −1,9° a +1,8° nas amostras do mar fresco; o navio sobe e desce com a mesma onda que o cliente desenha.
+  Na física, o mesmo relógio do cliente (o tempo do mundo / 20).
+
+| `Akashic/Spawn`, mar fresco | `Akashic/Spawn`, tempestade | `world`: sem ondas |
+|---|---|---|
+| ![navio](img/real/teof-mp-spawn-navio.png) | ![tempestade](img/real/teof-mp-spawn-tempestade.png) | ![sem ondas](img/real/teof-mp-principal-sem-ondas.png) |
+
+**[a verificar]** no servidor de verdade: o mundo `Akashic/Spawn` com o terreno dele (aqui foi uma cópia do `world`),
+e o casamento visual do navio com a onda numa placa de vídeo (aqui, 4 a 7 quadros por segundo em GL por software).
+
 ## Defeitos que só o ambiente real mostrou (corrigidos)
 
 1. **Fresta na borda de chunk sobre o terreno real** (a linha escura reta da esquerda). Cada chunk calcula a atenuação
@@ -139,4 +163,7 @@ envio dos vértices pelo `Tessellator` do Angelica com shaderpack custa muitas v
 * O jar do OceanWaves vai em `mods/` do servidor **e** no modpack do cliente (o servidor sozinho funciona para a física e
   a API; o cliente sem o servidor desenha o mar da configuração dele).
 * **CastleOfStone**: o SHA-256 do jar do cliente tem de entrar no `WhitelistMods.yml`, senão o jogador é recusado.
-* O Expeditions já está nos plugins (`Expeditions-0.1.0.jar`): a integração com a API é o próximo passo dele.
+* `mar.mundos` já vem com `Akashic/Spawn`: só ele tem ondas. Para outro mundo, o nome da pasta dele (o do Multiverse)
+  ou o número da dimensão.
+* O Expeditions do branch `claude/minecraft-ocean-physics-mod-n82b79` usa este mar (precisa da API 2, este jar ou
+  mais novo); o `Expeditions-0.1.0.jar` que está hoje no servidor é anterior e continua com o mar plano dele.
