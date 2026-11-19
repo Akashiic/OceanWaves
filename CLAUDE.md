@@ -49,6 +49,9 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClie
   `mc_Entity` (`IrisBridge`, por reflexão). O Angelica reescreve o `sortAndRender` e fecha a fase no fim: nada que
   dependa da fase pode ser desenhado depois dele sem o override. Com shaderpack o frustum vanilla não serve (use o
   `ViewCone`) e a passagem de sombra também chama o passe 1 (`ShaderPacks.renderingShadowPass`).
+* **Cada mundo tem o seu nível do mar** (`ServerSea.seaLevel(dim)`, `OceanWaves.restLevel(dim)`, na mensagem aos
+  clientes): o spawn do TEOF tem a água em y 30 (nível 31), não 63. Nada de `OceanConfig.seaLevel` direto fora do
+  `ServerSea` e do modo local do cliente.
 * **Mundos por nome, não por número**: os mundos do Multiverse (o spawn do TEOF é o `Akashic/Spawn`) ganham a
   dimensão só ao carregar e podem trocar de número a cada início. A configuração e a API (`dimensionOf`) vão por
   nome; o cliente aplica o mar ao mundo em que está, mandado pelo servidor a cada troca.

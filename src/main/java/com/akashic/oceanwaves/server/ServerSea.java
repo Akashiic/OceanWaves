@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import net.minecraft.block.material.Material;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChunkCoordinates;
@@ -46,6 +47,10 @@ public final class ServerSea {
     private final Map<Integer, SeaState> states = new ConcurrentHashMap<>();
     private final Map<Integer, WaveSet> waves = new ConcurrentHashMap<>();
     private final Map<Integer, SeaRegion> regions = new ConcurrentHashMap<>();
+    /** O nível do mar de cada mundo com ondas (o bloco de água mais alto é o nível − 1). */
+    private final Map<Integer, Integer> levels = new ConcurrentHashMap<>();
+    /** Mundos cujo nível ainda não deu para medir (as colunas em volta do spawn não estavam carregadas). */
+    private final Map<Integer, Boolean> unmeasured = new ConcurrentHashMap<>();
     /** A dimensão do último mar mandado a cada jogador (o teleporte de plugin nem sempre passa pelos eventos). */
     private final Map<UUID, Integer> sent = new HashMap<>();
     private boolean running;
@@ -68,6 +73,7 @@ public final class ServerSea {
         if (states.isEmpty() && OceanConfig.mainWorldFallback && DimensionManager.getWorld(0) != null) {
             fallback = true;
             states.put(0, OceanConfig.seaState());
+            level(DimensionManager.getWorld(0), null);
             OceanWavesMod.LOG.warn(
                 "Nenhum dos mundos {} existe neste servidor: ondas no mundo principal (dimensão 0)",
                 OceanConfig.worlds);
@@ -82,6 +88,8 @@ public final class ServerSea {
         states.clear();
         waves.clear();
         regions.clear();
+        levels.clear();
+        unmeasured.clear();
         sent.clear();
     }
 
@@ -97,6 +105,11 @@ public final class ServerSea {
 
     /** O mundo é um dos da configuração? Pelo número da dimensão, pela pasta ou pelo nome do level.dat. */
     static boolean configured(World w) {
+        return entry(w) != null;
+    }
+
+    /** A entrada da configuração que casa com o mundo (sem o @nível), ou null. */
+    static String entry(World w) {
         int dim = w.provider.dimensionId;
         String dir = norm(
             w.getSaveHandler() == null ? null
@@ -108,10 +121,76 @@ public final class ServerSea {
         for (String c : OceanConfig.worlds) {
             String n = norm(c);
             if (n.equals(dir) || n.equals(level) || n.equals(String.valueOf(dim)) || n.equals("dim" + dim)) {
-                return true;
+                return c;
             }
         }
-        return false;
+        return null;
+    }
+
+    /** O nível do mar do mundo com ondas (o da configuração geral para os outros). */
+    public int seaLevel(int dimension) {
+        Integer l = levels.get(dimension);
+        return l != null ? l : OceanConfig.seaLevel;
+    }
+
+    /**
+     * Mede o nível do mar de um mundo: o bloco mais alto de colunas em volta do spawn (uma grade de 13 × 13 pontos, de
+     * 16 em 16 blocos, só em chunks já carregados); se a maioria das que acabam em água acaba no mesmo y, o nível é
+     * y + 1. Null se não há colunas de água bastantes (chunks ainda não carregados, ou um mundo sem mar ali).
+     */
+    static Integer measure(WorldServer w) {
+        ChunkCoordinates spawn = w.getSpawnPoint();
+        Map<Integer, Integer> votes = new HashMap<>();
+        int waterColumns = 0;
+        for (int i = -6; i <= 6; i++) {
+            for (int k = -6; k <= 6; k++) {
+                int x = spawn.posX + i * 16, z = spawn.posZ + k * 16;
+                if (!w.getChunkProvider()
+                    .chunkExists(x >> 4, z >> 4)) {
+                    continue;
+                }
+                for (int y = w.getActualHeight() - 1; y >= 0; y--) {
+                    Material mat = w.getBlock(x, y, z)
+                        .getMaterial();
+                    if (mat == Material.air) {
+                        continue;
+                    }
+                    if (mat == Material.water) {
+                        votes.merge(y, 1, Integer::sum);
+                        waterColumns++;
+                    }
+                    break;
+                }
+            }
+        }
+        int best = -1, count = 0;
+        for (Map.Entry<Integer, Integer> v : votes.entrySet()) {
+            if (v.getValue() > count) {
+                best = v.getKey();
+                count = v.getValue();
+            }
+        }
+        return waterColumns >= 8 && count * 2 > waterColumns ? best + 1 : null;
+    }
+
+    /** Acerta o nível do mar do mundo: o da configuração ({@code nome@nível}), o medido, ou o geral. Diz qual. */
+    private String level(WorldServer w, String entry) {
+        int dim = w.provider.dimensionId;
+        Integer given = entry == null ? null : OceanConfig.worldLevels.get(entry);
+        if (given != null) {
+            levels.put(dim, given);
+            unmeasured.remove(dim);
+            return "da configuração";
+        }
+        Integer measured = measure(w);
+        if (measured != null) {
+            levels.put(dim, measured);
+            unmeasured.remove(dim);
+            return "medido em volta do spawn";
+        }
+        levels.put(dim, OceanConfig.seaLevel);
+        unmeasured.put(dim, Boolean.TRUE);
+        return "o geral, até dar para medir";
     }
 
     private static String norm(String s) {
@@ -135,7 +214,14 @@ public final class ServerSea {
             states.put(dim, OceanConfig.seaState());
             regions.remove(dim);
             waves.remove(dim);
-            OceanWavesMod.LOG.info("Ondas no mundo {} (dimensão {}): {}", worldName(w), dim, region(dim));
+            String how = level(w, entry(w));
+            OceanWavesMod.LOG.info(
+                "Ondas no mundo {} (dimensão {}): {}, nível do mar {} ({})",
+                worldName(w),
+                dim,
+                region(dim),
+                seaLevel(dim),
+                how);
             OceanNet.channel.sendToDimension(message(dim), dim);
         }
     }
@@ -145,7 +231,7 @@ public final class ServerSea {
         List<String> out = new ArrayList<>();
         for (int d : states.keySet()) {
             WorldServer w = DimensionManager.getWorld(d);
-            out.add((w == null ? "?" : worldName(w)) + " (dimensão " + d + ")");
+            out.add((w == null ? "?" : worldName(w)) + " (dimensão " + d + ", nível do mar " + seaLevel(d) + ")");
         }
         return out.isEmpty() ? "nenhum mundo" : String.join(", ", out);
     }
@@ -218,7 +304,7 @@ public final class ServerSea {
         return new MessageSeaState(
             dimension,
             states.get(dimension),
-            OceanConfig.seaLevel,
+            seaLevel(dimension),
             OceanConfig.shoreWidth,
             OceanConfig.breakerIndex,
             region(dimension));
@@ -244,6 +330,8 @@ public final class ServerSea {
             states.remove(dim);
             waves.remove(dim);
             regions.remove(dim);
+            levels.remove(dim);
+            unmeasured.remove(dim);
         }
     }
 
@@ -282,6 +370,17 @@ public final class ServerSea {
         MinecraftServer s = MinecraftServer.getServer();
         if (s == null) {
             return;
+        }
+        // o nível que não deu para medir quando o mundo carregou: de novo, agora que pode haver chunks carregados
+        for (Integer dim : unmeasured.keySet()) {
+            WorldServer w = DimensionManager.getWorld(dim);
+            Integer measured = w == null ? null : measure(w);
+            if (measured != null) {
+                unmeasured.remove(dim);
+                levels.put(dim, measured);
+                OceanWavesMod.LOG.info("Nível do mar de {} medido: {}", worldName(w), measured);
+                OceanNet.channel.sendToDimension(message(dim), dim);
+            }
         }
         for (Object o : s.getConfigurationManager().playerEntityList) {
             EntityPlayerMP p = (EntityPlayerMP) o;

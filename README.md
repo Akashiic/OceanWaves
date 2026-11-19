@@ -64,7 +64,10 @@ O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUI
 ```
 
 **Mundos.** As ondas só existem nos mundos de `mar.mundos`: o nome da pasta do mundo (os do Multiverse, como
-`Akashic/Spawn`, o spawn do servidor do TEOF, que é o padrão) ou o número da dimensão. Nos outros mundos a água é a
+`Akashic/Spawn`, o spawn do servidor do TEOF, que é o padrão) ou o número da dimensão, com o **nível do mar** depois de
+`@`. O spawn do TEOF é um mar feito sobre o vazio, 31 camadas de água de y 0 a 30: `Akashic/Spawn@31` (o padrão). Sem o
+`@`, o servidor mede o nível em volta do spawn do mundo (a altura em que a maioria das colunas acaba em água) e manda
+aos clientes; `/ondas info` mostra o nível de cada mundo. O `nivel` geral (63) só vale quando não dá para medir. Nos outros mundos a água é a
 vanilla, parada. Um mundo de plugin só ganha número de dimensão quando carrega (e pode ganhar outro a cada início),
 por isso a lista vai por nome: o servidor liga as ondas quando o mundo carrega. Se nenhum mundo da lista existir (jogo
 sozinho, outro servidor), as ondas vão para o mundo principal (`principalSeNenhum`). `/ondas info` diz onde há

@@ -32,6 +32,11 @@ public final class OceanConfig {
      * o número da dimensão.
      */
     public static java.util.List<String> worlds = new java.util.ArrayList<>();
+    /**
+     * O nível do mar de cada mundo da lista que o diz ({@code Akashic/Spawn@31}: o bloco de água mais alto é o 30); os
+     * que não dizem são medidos pelo servidor em volta do spawn ({@code server.ServerSea}).
+     */
+    public static java.util.Map<String, Integer> worldLevels = new java.util.HashMap<>();
     /** Nenhum dos {@link #worlds} existe neste servidor (jogo sozinho, outro servidor): ondas no mundo principal. */
     public static boolean mainWorldFallback = true;
     /** As dimensões da configuração para um cliente num servidor sem o mod (só números; sem nomes, a 0). */
@@ -100,20 +105,40 @@ public final class OceanConfig {
         components = c.get(m, "componentes", components, "Quantas ondas somadas (8 a 256)")
             .getInt();
         seed = Long.decode(c.getString("semente", m, "0x0CEA17", "Semente das fases e direções"));
-        seaLevel = c.get(m, "nivel", seaLevel, "Nível do mar (o bloco de água mais alto é nivel - 1)")
+        seaLevel = c
+            .get(
+                m,
+                "nivel",
+                seaLevel,
+                "Nível do mar quando um mundo não o diz e não dá para medir (o bloco de água mais alto é nivel - 1)")
             .getInt();
         c.getCategory(m)
             .remove("dimensoes");
         worlds.clear();
+        worldLevels.clear();
         dimensions.clear();
         for (String w : c.get(
             m,
             "mundos",
-            new String[] { "Akashic/Spawn" },
-            "Mundos com ondas: o nome da pasta do mundo (o do Multiverse, ex.: Akashic/Spawn) ou o número da dimensão. "
-                + "Nos outros mundos a água é a vanilla.")
+            new String[] { "Akashic/Spawn@31" },
+            "Mundos com ondas: o nome da pasta do mundo (o do Multiverse, ex.: Akashic/Spawn) ou o número da dimensão, "
+                + "com o nível do mar depois de @ (Akashic/Spawn@31: a água mais alta no y 30). Sem o @, o servidor mede o "
+                + "nível em volta do spawn do mundo. Nos outros mundos a água é a vanilla.")
             .getStringList()) {
             String t = w.trim();
+            int at = t.lastIndexOf('@');
+            if (at > 0) {
+                try {
+                    int level = Integer.parseInt(
+                        t.substring(at + 1)
+                            .trim());
+                    t = t.substring(0, at)
+                        .trim();
+                    worldLevels.put(t, level);
+                } catch (NumberFormatException e) {
+                    // sem nível válido: o nome inteiro, medido pelo servidor
+                }
+            }
             if (t.isEmpty()) {
                 continue;
             }

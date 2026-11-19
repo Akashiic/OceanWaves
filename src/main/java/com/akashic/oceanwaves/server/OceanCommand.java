@@ -236,7 +236,7 @@ public final class OceanCommand extends CommandBase {
             String.format(
                 Locale.ROOT,
                 "Superfície em Y %.3f (%.3f do repouso), atenuação %.2f, inclinação %.1f°, jacobiano %.2f, velocidade (%.2f, %.2f, %.2f) m/s, %d iterações, %.1f µs",
-                OceanWaves.restLevel() + h,
+                OceanWaves.restLevel(dim) + h,
                 h,
                 s.attenuation,
                 Math.toDegrees(Math.acos(n[1])),

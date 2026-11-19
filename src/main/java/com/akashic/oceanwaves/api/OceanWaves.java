@@ -24,8 +24,11 @@ import com.akashic.oceanwaves.world.OceanColumns;
  */
 public final class OceanWaves {
 
-    /** 2: {@link #dimensionOf} (os mundos com ondas escolhidos pelo nome, como os do Multiverse). */
-    public static final int API_VERSION = 2;
+    /**
+     * 3: {@link #restLevel(int)} (o nível do mar de cada mundo: o do spawn do TEOF é 31). 2: {@link #dimensionOf} (os
+     * mundos com ondas escolhidos pelo nome, como os do Multiverse).
+     */
+    public static final int API_VERSION = 3;
 
     private OceanWaves() {}
 
@@ -68,7 +71,16 @@ public final class OceanWaves {
         return w == null ? Double.NaN : w.getTotalWorldTime() / 20.0;
     }
 
-    /** O Y da superfície em repouso: o topo da água da fonte no nível do mar. */
+    /**
+     * O Y da superfície em repouso no mundo da dimensão: o topo da água da fonte no nível do mar dele (cada mundo tem o
+     * seu: o da configuração, {@code Akashic/Spawn@31}, ou o medido em volta do spawn).
+     */
+    public static double restLevel(int dimension) {
+        return ServerSea.INSTANCE.seaLevel(dimension) - 1 + OceanColumns.SOURCE_TOP;
+    }
+
+    /** O nível de repouso da configuração geral. Use {@link #restLevel(int)}: cada mundo tem o seu. */
+    @Deprecated
     public static double restLevel() {
         return OceanConfig.seaLevel - 1 + OceanColumns.SOURCE_TOP;
     }
@@ -85,7 +97,7 @@ public final class OceanWaves {
         int width = maxX - minX + 1, height = maxZ - minZ + 1;
         boolean[] open = new boolean[width * height];
         float[] depth = new float[width * height];
-        int y = OceanConfig.seaLevel - 1;
+        int y = ServerSea.INSTANCE.seaLevel(dimension) - 1;
         SeaRegion region = region(dimension);
         for (int z = 0; z < height; z++) {
             for (int x = 0; x < width; x++) {
@@ -134,8 +146,9 @@ public final class OceanWaves {
     public static double surfaceY(int dimension, double x, double z) {
         WaveSet ws = waves(dimension);
         if (ws == null) {
-            return restLevel();
+            return restLevel(dimension);
         }
-        return restLevel() + new OceanField(ws).eulerian(x, z, time(dimension), ws.count, new WaveSample(), false);
+        return restLevel(dimension)
+            + new OceanField(ws).eulerian(x, z, time(dimension), ws.count, new WaveSample(), false);
     }
 }

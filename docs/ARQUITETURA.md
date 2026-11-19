@@ -38,7 +38,9 @@ reaproveitados); uma instância por thread de tudo que guarda estado de trabalho
 
 * `ServerSea`: o estado de cada dimensão com ondas. Os mundos vêm de `mar.mundos`, pelo nome da pasta (os do
   Multiverse ganham número de dimensão só ao carregar, então as ondas ligam no `WorldEvent.Load` e saem no `Unload`)
-  ou pelo número; sem nenhum deles no servidor, o principal. Uma vez por segundo confere se algum jogador trocou de
+  ou pelo número; sem nenhum deles no servidor, o principal. Cada um tem o seu nível do mar: o da configuração
+  (`Akashic/Spawn@31`) ou o medido em volta do spawn (a maioria das colunas de uma grade de 13 × 13 pontos acabando em
+  água no mesmo y), medido de novo a cada segundo enquanto os chunks não estão carregados. Uma vez por segundo confere se algum jogador trocou de
   mundo sem os eventos do FML (teleporte de plugin) e manda o mar do novo. Manda a quem entra, troca de
   dimensão ou renasce, e a todos da dimensão quando muda (`MessageSeaState` no canal FML `oceanwaves`).
 * `/ondas` (`/oceanwaves`, `/ow`), operadores: `info`, `estado <nome>`, `vento <m/s> [graus]`, `altura`, `escala`,
