@@ -56,7 +56,8 @@ public final class OceanWaves {
     /**
      * A atenuação da costa numa região, das colunas reais do mundo (a mesma regra e a mesma conta dos clientes).
      * Colunas de chunks não carregados contam como mar aberto. Para um casco: a região que ele cobre, com uma folga
-     * de {@code OceanConfig.shoreWidth}.
+     * de {@link #shoreMargin} em volta (com menos, a atenuação perto da borda da região sai diferente da que os
+     * clientes desenham).
      */
     public static ShoreField shore(int dimension, int minX, int minZ, int maxX, int maxZ) {
         WorldServer w = DimensionManager.getWorld(dimension);
@@ -94,6 +95,15 @@ public final class OceanWaves {
             ws.significantHeight,
             ws.lipschitz,
             ws.maxDisplacement);
+    }
+
+    /** A folga, em blocos, que {@link #shore} precisa em volta da área de interesse para dar os valores exatos. */
+    public static int shoreMargin(int dimension) {
+        WaveSet ws = waves(dimension);
+        return (int) Math.ceil(
+            ws == null ? OceanConfig.shoreWidth
+                : ShoreField.influenceRadius(OceanConfig.shoreWidth, ws.lipschitz, ws.maxDisplacement))
+            + 1;
     }
 
     /**

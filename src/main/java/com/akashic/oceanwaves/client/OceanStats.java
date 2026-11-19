@@ -25,6 +25,11 @@ public final class OceanStats {
         return OceanRenderer.INSTANCE.lastQuads;
     }
 
+    /** Se o mod detecta um shaderpack ligado (e deixa a luz com o pack). */
+    public static boolean shaderPack() {
+        return ShaderPacks.inUse();
+    }
+
     public static void reset() {
         OceanRenderer.INSTANCE.resetAverages();
     }

@@ -60,7 +60,33 @@ public final class OceanRenderer {
     private double avgMesh;
     private double avgDraw;
 
+    private static final long REBUILD_BUDGET_NANOS = 3_000_000L;
+    private int[] spiral = new int[0];
+    private int spiralRadius = -1;
+
     private OceanRenderer() {}
+
+    /** Os deslocamentos (dx, dz) dentro do raio, do mais perto para o mais longe. */
+    private int[] spiral(int radius) {
+        if (radius != spiralRadius) {
+            java.util.List<int[]> list = new ArrayList<>();
+            for (int dz = -radius; dz <= radius; dz++) {
+                for (int dx = -radius; dx <= radius; dx++) {
+                    if (dx * dx + dz * dz <= radius * radius + 1) {
+                        list.add(new int[] { dx, dz });
+                    }
+                }
+            }
+            list.sort((a, b) -> Integer.compare(a[0] * a[0] + a[1] * a[1], b[0] * b[0] + b[1] * b[1]));
+            spiral = new int[list.size() * 2];
+            for (int i = 0; i < list.size(); i++) {
+                spiral[2 * i] = list.get(i)[0];
+                spiral[2 * i + 1] = list.get(i)[1];
+            }
+            spiralRadius = radius;
+        }
+        return spiral;
+    }
 
     OceanChunks chunks() {
         return chunks;
@@ -87,6 +113,9 @@ public final class OceanRenderer {
     /** Chamado no fim do passe 1 do terreno. */
     public void render(float partialTicks) {
         if (failed || !ClientSea.active()) {
+            return;
+        }
+        if (ShaderPacks.inUse() && ShaderPacks.renderingShadowPass()) {
             return;
         }
         try {
@@ -124,16 +153,21 @@ public final class OceanRenderer {
         frustum.setPosition(camX, camY, camZ);
         double reach = waves.maxAmplitude + waves.meanLevel + 1;
         visible.clear();
+        boolean shaders = ShaderPacks.inUse();
         int rebuilds = 0;
-        for (int dz = -radius; dz <= radius; dz++) {
-            for (int dx = -radius; dx <= radius; dx++) {
-                if (dx * dx + dz * dz > radius * radius + 1) {
-                    continue;
-                }
+        // Do mais perto para o mais longe, com um orçamento de tempo (não de contagem): a face de cima da água
+        // vanilla já some em todo chunk de mar, então cada chunk ainda não lido é um buraco; num quadro lento (PC
+        // fraco, shaderpack, logo depois de um teleporte) um limite fixo por quadro deixava buracos por dezenas de
+        // segundos.
+        int[] order = spiral(radius);
+        long budget = t0 + REBUILD_BUDGET_NANOS;
+        for (int o = 0; o < order.length; o += 2) {
+            int dx = order[o], dz = order[o + 1];
+            {
                 OceanChunks.Column c = chunks.get(ccx + dx, ccz + dz);
                 if (c.dirty) {
-                    // os de perto primeiro; os outros esperam o próximo quadro
-                    if (rebuilds >= OceanConfig.rebuildsPerFrame && dx * dx + dz * dz > 4) {
+                    if (rebuilds >= OceanConfig.rebuildsPerFrame && dx * dx + dz * dz > 4
+                        && System.nanoTime() > budget) {
                         continue;
                     }
                     chunks.rebuild(c);
@@ -145,7 +179,10 @@ public final class OceanRenderer {
                 double x0 = c.cx * 16.0, z0 = c.cz * 16.0;
                 AxisAlignedBB box = AxisAlignedBB
                     .getBoundingBox(x0 - 4, rest - reach, z0 - 4, x0 + 20, rest + reach, z0 + 20);
-                if (!frustum.isBoundingBoxInFrustum(box)) {
+                // com shaderpack o Iris não atualiza o frustum vanilla (ClippingHelperImpl) para a câmera: visto no
+                // BSL,
+                // ele descartava quase todos os chunks. Ali o recorte fica com o pipeline do pack.
+                if (!shaders && !frustum.isBoundingBoxInFrustum(box)) {
                     continue;
                 }
                 visible.add(c);
@@ -229,6 +266,9 @@ public final class OceanRenderer {
         GL11.glShadeModel(GL11.GL_SMOOTH);
         GL11.glColor4f(1, 1, 1, 1);
         Tessellator tess = Tessellator.instance;
+        if (!own && ShaderPacks.inUse()) {
+            IrisBridge.begin();
+        }
         try {
             tess.startDrawingQuads();
             float[] d = buffer.data;
@@ -255,6 +295,7 @@ public final class OceanRenderer {
             tess.draw();
             lastGlNanos = System.nanoTime() - d0;
         } finally {
+            IrisBridge.end();
             tess.setTranslation(0, 0, 0);
             GL11.glDepthMask(depthMask);
             if (cull) {

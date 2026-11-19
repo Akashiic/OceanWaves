@@ -37,13 +37,18 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClie
   voláteis.
 * **Nada alocado nos laços quentes** (malha, sombreamento, física): amostras e buffers reaproveitados; uma instância
   por thread de `GridEvaluator`, `OceanField`, `HeightPatch`, `OceanMesher`.
+* **Atenuação por pedaços**: a folga em volta de um chunk vem de `ShoreField.influenceRadius` (a faixa de costa e o
+  alcance do limite de gradiente), não da largura da costa. Com menos, dois chunks vizinhos discordam na borda e abre
+  fresta (visto no ambiente real). Rode `neighbouringChunksAgreeOnTheirEdge`.
 * **Malha sem frestas**: o peso do LOD é função só da posição e da câmera; as arestas com vizinho mais grosso são
   costuradas (`OceanMesher.stitch`). Rode `neighboursOfDifferentResolutionShareTheirEdge` e
   `stitchingClosesTJunctions`.
 * GL: sempre pelo `Tessellator` e pelos estados que o vanilla usa (o Angelica intercepta o GL; nada de
   `glPushAttrib`, programas próprios ou funções que o perfil core não tem). Guardar e devolver o estado mexido.
 * Não quebrar o jogo: o renderizador desliga a si mesmo com um log se lançar exceção.
-* O que não foi verificado em jogo fica marcado **[a verificar]** nos documentos. O harness roda sem GPU e sem o
-  Angelica: ele prova a lógica e a imagem básica, não o pack.
+* O que não foi verificado em jogo fica marcado **[a verificar]** nos documentos. O harness do ambiente de
+  desenvolvimento roda sem GPU e sem o Angelica; o pack real (TEOF) e o servidor do Forbidden podem ser montados aqui
+  como em `docs/TESTES-AMBIENTE-REAL.md` (o jar de teste com o harness: tirar o `exclude` do `shadowJar`, construir,
+  `git checkout build.gradle.kts`).
 * Plataforma (as mesmas restrições do Kunftig): bytecode Java 8 (Jabel: sintaxe moderna, API do Java 8); mixins
   UniMixins; nada de `getMethod` em classes do Bukkit (a API não toca no Bukkit).

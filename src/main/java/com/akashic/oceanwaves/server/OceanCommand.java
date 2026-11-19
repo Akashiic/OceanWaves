@@ -173,7 +173,7 @@ public final class OceanCommand extends CommandBase {
         }
         EntityPlayerMP p = (EntityPlayerMP) sender;
         WaveSet w = OceanWaves.waves(dim);
-        int r = (int) Math.ceil(OceanConfig.shoreWidth) + 2;
+        int r = (int) Math.ceil(ShoreField.influenceRadius(OceanConfig.shoreWidth, w.lipschitz, w.maxDisplacement)) + 2;
         int bx = (int) Math.floor(p.posX), bz = (int) Math.floor(p.posZ);
         ShoreField shore = OceanWaves.shore(dim, bx - r, bz - r, bx + r, bz + r);
         OceanField f = new OceanField(w, shore);

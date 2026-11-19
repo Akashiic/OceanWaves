@@ -65,13 +65,32 @@ public final class OceanHarness {
     private long lastFrame;
     private boolean done;
 
+    /** Servidor a que conectar ("host:porta"), ou null: mundo integrado. */
+    private String remote;
+    /** Deslocamento dos casos no multijogador (o oceano do mundo do servidor). */
+    private static double originX, originZ;
+    private int joinTicks;
+    private int remoteStep;
+
     public static void install(String selection) {
         OceanHarness h = new OceanHarness();
-        List<String> names = selection == null || selection.trim()
-            .isEmpty() ? null
-                : Arrays.asList(
-                    selection.trim()
-                        .split("[ ,]+"));
+        String first = "";
+        for (String line : (selection == null ? "" : selection).split("\\r?\\n")) {
+            String l = line.trim();
+            if (l.startsWith("origem ")) {
+                String[] o = l.substring(7)
+                    .trim()
+                    .split("[ ,]+");
+                originX = Double.parseDouble(o[0]);
+                originZ = Double.parseDouble(o[1]);
+            } else if (l.startsWith("servidor ")) {
+                h.remote = l.substring(9)
+                    .trim();
+            } else if (first.isEmpty() && !l.isEmpty()) {
+                first = l;
+            }
+        }
+        List<String> names = first.isEmpty() ? null : Arrays.asList(first.split("[ ,]+"));
         for (Object[] c : CASES) {
             if (names == null || names.contains(c[0])) {
                 h.cases.add(c);
@@ -119,6 +138,13 @@ public final class OceanHarness {
                     deltaY = 0;
                 }
             };
+            if (remote != null) {
+                String[] hp = remote.split(":");
+                OceanWavesMod.LOG.warn("[harness] conectando a {}", remote);
+                cpw.mods.fml.client.FMLClientHandler.instance()
+                    .connectToServerAtStartup(hp[0], hp.length > 1 ? Integer.parseInt(hp[1]) : 25565);
+                return;
+            }
             // fundo de pedra, 2 de terra, 8 de água: o topo da água fica em y = 62, nível do mar 63; bioma oceano
             mc.launchIntegratedServer(
                 WORLD,
@@ -134,6 +160,10 @@ public final class OceanHarness {
             mc.displayGuiScreen(null);
         }
         mc.gameSettings.hideGUI = true;
+        if (remote != null) {
+            remoteTick(mc);
+            return;
+        }
         MinecraftServer server = MinecraftServer.getServer();
         EntityPlayerMP p = server == null ? null
             : server.getConfigurationManager()
@@ -153,7 +183,8 @@ public final class OceanHarness {
                     + mc.displayHeight
                     + ", distância "
                     + mc.gameSettings.renderDistanceChunks
-                    + " chunks");
+                    + " chunks, shaderpack detectado: "
+                    + OceanStats.shaderPack());
             index = 0;
             ticks = 0;
             begin(mc, p, ws, cases.isEmpty() ? CASES[0] : cases.get(0));
@@ -186,6 +217,106 @@ public final class OceanHarness {
             frames.clear();
             OceanStats.reset();
         }
+    }
+
+    /**
+     * Multijogador: não há servidor integrado para controlar; os casos são conduzidos por comandos no chat (o jogador
+     * precisa ser operador no servidor de teste) e a câmera é posta no cliente.
+     */
+    private void remoteTick(Minecraft mc) {
+        joinTicks++;
+        if (index < 0) {
+            if (joinTicks == 100) {
+                report(
+                    "java " + System.getProperty("java.version")
+                        + ", "
+                        + mc.displayWidth
+                        + "x"
+                        + mc.displayHeight
+                        + ", distância "
+                        + mc.gameSettings.renderDistanceChunks
+                        + " chunks, servidor "
+                        + remote);
+                mc.thePlayer.sendChatMessage("/gamemode 1");
+            }
+            if (joinTicks == 140) {
+                report(clockLine("ao entrar"));
+                index = 0;
+                ticks = 0;
+                remoteBegin(mc, cases.get(0));
+            }
+            return;
+        }
+        Object[] c = cases.get(index);
+        remoteHold(mc, c);
+        ticks++;
+        if (ticks == WARMUP / 2) {
+            report(clockLine(String.valueOf(c[0])));
+        }
+        if (ticks == WARMUP) {
+            frames.clear();
+            OceanStats.reset();
+        }
+        if (ticks == WARMUP + CASE_TICKS - 1) {
+            ScreenShotHelper.saveScreenshot(
+                mc.mcDataDir,
+                "ondas-mp-" + c[0] + ".png",
+                mc.displayWidth,
+                mc.displayHeight,
+                mc.getFramebuffer());
+        }
+        if (ticks >= WARMUP + CASE_TICKS) {
+            finish(c);
+            index++;
+            if (index >= cases.size()) {
+                done = true;
+                write(mc);
+                mc.shutdown();
+                return;
+            }
+            ticks = 0;
+            remoteBegin(mc, cases.get(index));
+        }
+    }
+
+    private String clockLine(String when) {
+        net.minecraft.world.World w = Minecraft.getMinecraft().theWorld;
+        com.akashic.oceanwaves.core.WaveSet ws = com.akashic.oceanwaves.client.ClientSea.waves();
+        return String.format(
+            Locale.ROOT,
+            "relógio (%s): %s, %.2f TPS, mar - tempo do mundo = %+.3f s; mar %s, resumo %016x, %d componentes",
+            when,
+            com.akashic.oceanwaves.client.ClientSea.CLOCK.synced() ? "do servidor" : "local",
+            com.akashic.oceanwaves.client.ClientSea.CLOCK.serverTps(),
+            com.akashic.oceanwaves.client.ClientSea.time(0) - w.getTotalWorldTime() / 20.0,
+            com.akashic.oceanwaves.client.ClientSea.fromServer() ? "do servidor" : "local",
+            ws.fingerprint(),
+            ws.count);
+    }
+
+    private void remoteBegin(Minecraft mc, Object[] c) {
+        mc.thePlayer.sendChatMessage(c[1] == null ? "/ondas desligar" : "/ondas estado " + c[1]);
+        mc.thePlayer.sendChatMessage("/time set " + c[7]);
+        mc.thePlayer.sendChatMessage(
+            String.format(
+                Locale.ROOT,
+                "/tp %.1f %.1f %.1f",
+                (Double) c[2] + originX,
+                (Double) c[3],
+                (Double) c[4] + originZ));
+        frames.clear();
+        lastFrame = 0;
+    }
+
+    private static void remoteHold(Minecraft mc, Object[] c) {
+        mc.thePlayer.capabilities.isFlying = true;
+        mc.thePlayer.setPositionAndRotation(
+            (Double) c[2] + originX,
+            (Double) c[3],
+            (Double) c[4] + originZ,
+            (Float) c[5],
+            (Float) c[6]);
+        mc.thePlayer.motionX = mc.thePlayer.motionY = mc.thePlayer.motionZ = 0;
     }
 
     private void begin(Minecraft mc, EntityPlayerMP p, WorldServer ws, Object[] c) {

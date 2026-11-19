@@ -14,6 +14,7 @@ final class ShaderPacks {
     private static Method apiInstance;
     private static Method apiInUse;
     private static Method currentPack;
+    private static Method apiShadow;
     private static boolean resolved;
 
     private ShaderPacks() {}
@@ -40,6 +41,21 @@ final class ShaderPacks {
         return inUse;
     }
 
+    /**
+     * O Iris está desenhando a passagem de sombra? Ela também passa pelo passe translúcido do terreno; o mar não
+     * precisa projetar sombra, e o frustum dessa hora é o da luz, não o da câmera.
+     */
+    static boolean renderingShadowPass() {
+        if (!inUse || apiShadow == null) {
+            return false;
+        }
+        try {
+            return (Boolean) apiShadow.invoke(apiInstance.invoke(null));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
+        }
+    }
+
     private static void resolve() {
         if (resolved) {
             return;
@@ -49,6 +65,7 @@ final class ShaderPacks {
             Class<?> api = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
             apiInstance = api.getMethod("getInstance");
             apiInUse = api.getMethod("isShaderPackInUse");
+            apiShadow = api.getMethod("isRenderingShadowPass");
             return;
         } catch (ReflectiveOperationException | LinkageError ignored) {}
         try {

@@ -140,4 +140,61 @@ class ShoreFieldTest {
         }
         assertTrue(x < 60, "a onda só chega a 90% em x = " + x);
     }
+
+    /**
+     * Dois chunks vizinhos, cada um com a atenuação calculada na própria região (o chunk e uma folga), têm de dar os
+     * mesmos valores na borda comum, num terreno com profundidade variada e um mar de tempestade. Com a folga antiga
+     * (a largura da costa + 1) os valores divergem e a superfície abre uma fresta na borda (visto no jogo); com a folga
+     * de {@link ShoreField#influenceRadius} são iguais.
+     */
+    @Test
+    void neighbouringChunksAgreeOnTheirEdge() {
+        WaveSet waves = Synthesis.build(SeaPresets.get("tempestade").withChoppiness(1));
+        double width = 10, l = waves.lipschitz, m = waves.maxDisplacement;
+        // um "mundo" de 160 x 160 colunas de mar fundo com uma ilha de 3 x 3 a 15 blocos a oeste da borda comum
+        // (x = 80): a região do chunk de oeste a vê, a do chunk de leste (com a folga antiga) não
+        int size = 160;
+        boolean[] worldOpen = new boolean[size * size];
+        float[] worldDepth = new float[size * size];
+        Arrays.fill(worldOpen, true);
+        Arrays.fill(worldDepth, 30);
+        for (int z = 70; z < 73; z++) {
+            for (int x = 64; x < 67; x++) {
+                worldOpen[z * size + x] = false;
+            }
+        }
+        int newMargin = (int) Math.ceil(ShoreField.influenceRadius(width, l, m)) + 1;
+        assertTrue(newMargin > (int) Math.ceil(width) + 1, "a tempestade influi além da costa");
+        double oldWorst = edgeMismatch(worldOpen, worldDepth, size, (int) Math.ceil(width) + 1, width, l, m, waves);
+        double newWorst = edgeMismatch(worldOpen, worldDepth, size, newMargin, width, l, m, waves);
+        assertTrue(oldWorst > 1e-3, "a folga antiga deveria divergir: " + oldWorst);
+        assertTrue(newWorst < 1e-5, "com a folga nova a borda diverge " + newWorst);
+    }
+
+    /** A maior diferença de atenuação na borda x = 80 entre o chunk de x 64..80 e o de x 80..96. */
+    private static double edgeMismatch(boolean[] open, float[] depth, int size, int margin, double width, double l,
+        double m, WaveSet waves) {
+        ShoreField a = region(open, depth, size, 64, 64, margin, width, l, m, waves);
+        ShoreField b = region(open, depth, size, 80, 64, margin, width, l, m, waves);
+        double worst = 0;
+        for (int z = 64; z <= 80; z++) {
+            worst = Math.max(worst, Math.abs(a.cornerAt(80, z) - b.cornerAt(80, z)));
+        }
+        return worst;
+    }
+
+    private static ShoreField region(boolean[] open, float[] depth, int size, int cx, int cz, int margin, double width,
+        double l, double m, WaveSet waves) {
+        int w = 16 + 2 * margin;
+        boolean[] o = new boolean[w * w];
+        float[] d = new float[w * w];
+        for (int z = 0; z < w; z++) {
+            for (int x = 0; x < w; x++) {
+                int wx = cx - margin + x, wz = cz - margin + z;
+                o[z * w + x] = open[wz * size + wx];
+                d[z * w + x] = depth[wz * size + wx];
+            }
+        }
+        return ShoreField.build(cx - margin, cz - margin, w, w, o, d, width, 0.78, waves.significantHeight, l, m);
+    }
 }

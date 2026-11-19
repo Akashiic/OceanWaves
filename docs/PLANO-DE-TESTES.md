@@ -3,7 +3,7 @@
 Três camadas: o núcleo (JUnit, sem Minecraft), o cliente de desenvolvimento sem tela (o harness), e o servidor TEOF
 de verdade. O que só a última pode dizer está marcado **[a verificar]**.
 
-## 1. Núcleo (JUnit): 40 testes, todos passando
+## 1. Núcleo (JUnit): 41 testes, todos passando
 
 `./gradlew :core:test` (ou `build`). Passam também no **Java 8** (Temurin 8u512) e no Java 21.
 
@@ -14,7 +14,7 @@ de verdade. O que só a última pode dizer está marcado **[a verificar]**.
 | `OceanFieldTest` | derivadas, normal e velocidade contra diferenças finitas; inversa com resíduo < 10⁻⁶ m em ≤ 5 iterações; partida quente em 1 iteração; **nunca dobra** (J ≥ (1 − L)²); nível médio euleriano = repouso; crista/vale de Stokes; atenuação zero = água parada |
 | `GridEvaluatorTest` | grade = consultas pontuais (2·10⁻⁴); caminho rápido = analítico (posições) e normais a 3%; tabelas do quadro = sem tabelas; vizinhos de mesmo espaçamento com vértices e normais iguais; vizinhos de espaçamentos diferentes com o mesmo vértice na aresta; longe sobram só as ondas longas |
 | `HeightPatchTest` | retalho do casco < 2 cm rms da inversa exata; fora da grade = NaN |
-| `ShoreFieldTest` | transformada de distância exata (contra força bruta); costa = zero em toda a aresta; crescimento monótono; limite de quebra pela profundidade; **a costa nunca dobra a superfície**; o limite não come o mar aberto |
+| `ShoreFieldTest` | transformada de distância exata (contra força bruta); costa = zero em toda a aresta; crescimento monótono; limite de quebra pela profundidade; **a costa nunca dobra a superfície**; o limite não come o mar aberto; **chunks vizinhos concordam na borda** (a fresta vista no ambiente real) |
 | `OceanMesherTest` | área coberta = colunas de mar, em todos os espaçamentos; poucos quads longe; espaçamento cresce com a distância; **junções em T fechadas** |
 | `ClockAndFitTest` | relógio com servidor a 15 TPS e atraso variável: monotônico, estima o TPS, erro < 3,5 ticks; salta em erro grande; plano de mínimos quadrados exato |
 
@@ -65,7 +65,11 @@ de cada caso (`run/client/screenshots/ondas-<caso>.png`) e escreve `run/client/o
 * Luz: o brilho do sol, o reflexo do céu mais forte nas faces viradas para longe (Fresnel), o tom turquesa nas cristas,
   e no pôr do sol o reflexo laranja nas faces viradas para o sol.
 
-## 3. No jogo de verdade **[a verificar]**
+## 3. No jogo de verdade
+
+Feito em 19/11/2026 com os arquivos reais do servidor e do cliente: [TESTES-AMBIENTE-REAL.md](TESTES-AMBIENTE-REAL.md).
+Verificados: 2 (Angelica sem shader), 5 (Neo States, em parte), 6 (multijogador), 7 (servidor sem o mod: o mar local
+foi o do mundo integrado). Não integra: 3 (BSL). Faltam: 1 (numa GPU), 4, 8 e 9.
 
 Num cliente TEOF com placa de vídeo, servidor Crucible com o mod, cópia isolada (a regra dos outros projetos):
 

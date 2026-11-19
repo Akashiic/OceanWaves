@@ -37,11 +37,12 @@ O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUI
 | Parte | Estado |
 |---|---|
 | Núcleo matemático (`core/`) | feito, 40 testes, conferido no Java 8 e no 21 |
-| Mod: estado do mar no servidor, rede, `/ondas`, API | feito; **visto no cliente de desenvolvimento** (servidor integrado) |
-| Desenho da superfície, face vanilla escondida, costa, luz | feito; **visto no cliente de desenvolvimento** sem Angelica e sem GPU ([capturas](docs/img)) |
-| Relógio pelo pacote de tempo vanilla | feito e testado em unidade; em multijogador real, **a verificar** |
-| Angelica, shaderpacks (BSL, Complementary), Mirai, DragonAPI, Neo States | **a verificar** no pack real ([plano](docs/PLANO-DE-TESTES.md)) |
-| Desempenho numa placa de vídeo | **a verificar**; neste contêiner (sem GPU, 8 chunks) o mar custa ~8 a 10 ms por quadro |
+| Mod: estado do mar no servidor, rede, `/ondas`, API | feito; **visto no servidor do Forbidden** (Crucible, 226 mods) e a API chamada de um plugin Bukkit ([relatório](docs/TESTES-AMBIENTE-REAL.md)) |
+| Desenho da superfície, face vanilla escondida, costa, luz | feito; **visto no cliente TEOF 6.3** (Angelica 2.2.43 sem shader, Neo States, 218 mods) |
+| Multijogador: o mesmo mar e o mesmo relógio | **visto**: cliente TEOF no Crucible, resumo das ondas igual nos dois lados, relógio assentando em 20 TPS |
+| Shaderpacks (BSL, Complementary) | **não integra ainda**: o mar não pega a luz do pack (teste inconclusivo sem GPU) |
+| Mirai, modo de compatibilidade (DragonAPI sem Angelica) | **a verificar** |
+| Desempenho numa placa de vídeo | **a verificar**; sem GPU, 8 chunks: ~8 a 10 ms por quadro no ambiente de desenvolvimento, ~6 a 20 ms no pack real |
 | Navios do Expeditions nas ondas | API pronta; a troca no Expeditions é outro PR ([como](docs/ARQUITETURA.md#navios-expeditions)) |
 | Barcos vanilla, entidades, névoa submersa, esteiras, camada GPU | próximas fases |
 
@@ -80,4 +81,5 @@ Harness visual (cliente de desenvolvimento, mundo plano de oceano, capturas e me
 | [docs/MATEMATICA.md](docs/MATEMATICA.md) | as equações, as garantias e os testes que as conferem |
 | [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | as camadas, o desempenho, os navios, as próximas fases |
 | [docs/PLANO-DE-TESTES.md](docs/PLANO-DE-TESTES.md) | os testes, o harness e o que falta ver no jogo |
+| [docs/TESTES-AMBIENTE-REAL.md](docs/TESTES-AMBIENTE-REAL.md) | o teste no servidor do Forbidden e no cliente TEOF 6.3, e os defeitos que só ali apareceram |
 | [docs/adr/](docs/adr/) | as decisões de arquitetura |

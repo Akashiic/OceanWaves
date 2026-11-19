@@ -160,6 +160,24 @@ public final class ShoreField implements Attenuation {
         }
     }
 
+    /**
+     * Até onde um bloco influi na atenuação de outro, em blocos: a faixa de costa e o alcance do envelope de cone (o
+     * maior valor de B, −ln(1 − L)/L, dividido pelo limite de gradiente por aresta). Quem calcula a atenuação por
+     * pedaços (um chunk e uma folga em volta) precisa de uma folga pelo menos deste tamanho para que dois pedaços
+     * vizinhos calculem os mesmos valores na borda comum; com folga menor a superfície abre uma fresta ali (visto no
+     * jogo numa tempestade sobre o terreno real, na borda de um chunk).
+     */
+    public static double influenceRadius(double shoreWidth, double lipschitz, double maxDisplacement) {
+        double r = shoreWidth;
+        if (maxDisplacement > 0) {
+            double l = Math.max(1e-6, Math.min(0.999, lipschitz));
+            double bMax = -Math.log(1 - l) / l;
+            double g = 1 / (1.5 * maxDisplacement * Math.sqrt(2));
+            r = Math.max(r, bMax / g);
+        }
+        return r;
+    }
+
     /** Transformada de distância euclidiana ao quadrado, separável (linhas e depois colunas). */
     static void edt(float[] f, int w, int h) {
         int n = Math.max(w, h);

@@ -127,9 +127,9 @@ final class OceanChunks implements IWorldAccess {
                 }
             }
         }
-        // a costa deste e dos vizinhos depende destas colunas
-        for (int dz = -1; dz <= 1; dz++) {
-            for (int dx = -1; dx <= 1; dx++) {
+        // a costa deste e dos vizinhos (até a folga máxima, 2 chunks) depende destas colunas
+        for (int dz = -2; dz <= 2; dz++) {
+            for (int dx = -2; dx <= 2; dx++) {
                 Column n = map.get(key(c.cx + dx, c.cz + dz));
                 if (n != null) {
                     n.shoreDirty = true;
@@ -161,8 +161,11 @@ final class OceanChunks implements IWorldAccess {
     /** A atenuação da costa de um chunk, das colunas dele e dos vizinhos (vizinho desconhecido conta como mar). */
     void rebuildShore(Column c, WaveSet waves) {
         c.shoreDirty = false;
-        int m = (int) Math.ceil(ClientSea.shoreWidth()) + 1;
-        m = Math.min(m, 16);
+        // a folga tem de cobrir o alcance inteiro da atenuação (a costa e o limite de gradiente): com menos, dois
+        // chunks vizinhos calculam valores diferentes na borda comum e a superfície abre uma fresta ali
+        int m = (int) Math
+            .ceil(ShoreField.influenceRadius(ClientSea.shoreWidth(), waves.lipschitz, waves.maxDisplacement)) + 1;
+        m = Math.min(m, 32);
         int size = 16 + 2 * m;
         boolean[] open = new boolean[size * size];
         float[] depth = new float[size * size];
