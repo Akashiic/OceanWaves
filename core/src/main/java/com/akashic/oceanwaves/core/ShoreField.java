@@ -44,6 +44,19 @@ public final class ShoreField implements Attenuation {
      */
     public static ShoreField build(int originX, int originZ, int w, int h, boolean[] open, float[] depth,
         double shoreWidth, double breakerIndex, double significantHeight) {
+        return build(originX, originZ, w, h, open, depth, shoreWidth, breakerIndex, significantHeight, 0, 0);
+    }
+
+    /**
+     * Com o mar ({@code lipschitz} L = Σ Qkа, {@code maxDisplacement} M = Σ Qa), a atenuação é suavizada só o
+     * necessário para a superfície nunca dobrar na costa: ‖∇(A·D)‖ ≤ A·L + M·|∇A|, e basta |∇A| &lt; (1 − L·A)/M.
+     * A condição é folgada onde A é pequeno (rente à costa) e aperta em mar aberto. Com B = −ln(1 − L·A)/L ela vira
+     * |∇B| ≤ 1/M, uniforme, que um envelope de cone impõe exatamente (o maior campo abaixo de B com essa constante de
+     * Lipschitz); aqui com folga de 1,5. Degraus de profundidade, quinas e faixas estreitas são suavizados, o resto
+     * fica como estava. L = M = 0: sem esse passo.
+     */
+    public static ShoreField build(int originX, int originZ, int w, int h, boolean[] open, float[] depth,
+        double shoreWidth, double breakerIndex, double significantHeight, double lipschitz, double maxDisplacement) {
         int cw = w + 1, ch = h + 1;
         float[] f = new float[cw * ch];
         float[] d = new float[cw * ch];
@@ -86,7 +99,65 @@ public final class ShoreField implements Attenuation {
             double bottom = 1 - (1 - v) * (1 - v);
             out[i] = (float) (shore * bottom);
         }
+        if (maxDisplacement > 0) {
+            double l = Math.max(1e-6, Math.min(0.999, lipschitz));
+            for (int i = 0; i < out.length; i++) {
+                out[i] = (float) (-Math.log(1 - l * out[i]) / l);
+            }
+            lipschitzClamp(out, cw, ch, 1 / (1.5 * maxDisplacement * Math.sqrt(2)));
+            for (int i = 0; i < out.length; i++) {
+                out[i] = (float) Math.min(1, (1 - Math.exp(-l * out[i])) / l);
+            }
+        }
         return new ShoreField(originX, originZ, w, h, out);
+    }
+
+    /**
+     * A(p) ← min_q A(q) + g·|p − q| por duas passadas de chanfro (vizinhos ortogonais com g, diagonais com g√2): cada
+     * aresta e cada diagonal da rede fica com diferença ≤ g e ≤ g√2. Na interpolação bilinear cada derivada parcial é
+     * uma média de diferenças de aresta, então |∇A| ≤ g√2; quem chama passa g/√2 para o limite valer em norma
+     * euclidiana. Só abaixa valores (nunca cria onda onde não havia).
+     */
+    static void lipschitzClamp(float[] a, int w, int h, double g) {
+        float go = (float) g, gd = (float) (g * Math.sqrt(2));
+        for (int z = 0; z < h; z++) {
+            for (int x = 0; x < w; x++) {
+                int i = z * w + x;
+                float v = a[i];
+                if (x > 0) {
+                    v = Math.min(v, a[i - 1] + go);
+                }
+                if (z > 0) {
+                    v = Math.min(v, a[i - w] + go);
+                    if (x > 0) {
+                        v = Math.min(v, a[i - w - 1] + gd);
+                    }
+                    if (x < w - 1) {
+                        v = Math.min(v, a[i - w + 1] + gd);
+                    }
+                }
+                a[i] = v;
+            }
+        }
+        for (int z = h - 1; z >= 0; z--) {
+            for (int x = w - 1; x >= 0; x--) {
+                int i = z * w + x;
+                float v = a[i];
+                if (x < w - 1) {
+                    v = Math.min(v, a[i + 1] + go);
+                }
+                if (z < h - 1) {
+                    v = Math.min(v, a[i + w] + go);
+                    if (x < w - 1) {
+                        v = Math.min(v, a[i + w + 1] + gd);
+                    }
+                    if (x > 0) {
+                        v = Math.min(v, a[i + w - 1] + gd);
+                    }
+                }
+                a[i] = v;
+            }
+        }
     }
 
     /** Transformada de distância euclidiana ao quadrado, separável (linhas e depois colunas). */

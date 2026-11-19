@@ -1,0 +1,137 @@
+package com.akashic.oceanwaves;
+
+import java.io.File;
+import java.util.HashSet;
+import java.util.Set;
+
+import net.minecraftforge.common.config.Configuration;
+
+import com.akashic.oceanwaves.core.SeaPresets;
+import com.akashic.oceanwaves.core.SeaState;
+
+/**
+ * {@code config/oceanwaves.cfg}. O mar ({@code mar}, {@code costa}) vale pelo servidor: ele o manda aos clientes. Sem
+ * o mod no servidor, o cliente usa o próprio. O desenho ({@code desenho}) é só do cliente.
+ */
+public final class OceanConfig {
+
+    private static Configuration file;
+
+    // mar
+    public static String preset = "moderado";
+    public static double windSpeed = -1;
+    public static double windDirection = 20;
+    public static double heightScale = 1;
+    public static double lengthScale = SeaPresets.SCALE;
+    public static double choppiness = 0.8;
+    public static int components = 64;
+    public static long seed = 0x0CEA17L;
+    public static int seaLevel = 63;
+    public static Set<Integer> dimensions = new HashSet<>();
+
+    // costa
+    public static double shoreWidth = 10;
+    public static double breakerIndex = 0.78;
+
+    // desenho
+    public static boolean render = true;
+    public static double minSpacing = 1.0;
+    public static double lodFactor = 0.02;
+    public static float alpha = 0.82f;
+    public static boolean shading = true;
+    public static boolean foam = true;
+    public static boolean specular = true;
+    public static int rebuildsPerFrame = 6;
+
+    private OceanConfig() {}
+
+    public static void load(File f) {
+        file = new Configuration(f);
+        read();
+    }
+
+    private static void read() {
+        Configuration c = file;
+        c.load();
+        String m = "mar";
+        c.setCategoryComment(
+            m,
+            "O mar. Vale pelo servidor (que o manda aos clientes); sem o mod no servidor, vale o do cliente.");
+        preset = c.getString(
+            "estado",
+            m,
+            preset,
+            "Estado de mar de partida: " + String.join(
+                ", ",
+                SeaPresets.all()
+                    .keySet()));
+        windSpeed = c.get(m, "vento", windSpeed, "Vento em m/s (-1: o do estado)")
+            .getDouble();
+        windDirection = c.get(m, "direcao", windDirection, "Para onde o vento sopra, graus (0 = leste, 90 = sul)")
+            .getDouble();
+        heightScale = c.get(m, "altura", heightScale, "Multiplica a altura das ondas")
+            .getDouble();
+        lengthScale = c
+            .get(
+                m,
+                "escala",
+                lengthScale,
+                "Escala de Froude do mar (0,5: maquete em meia escala do mar real que aquele vento faz)")
+            .getDouble();
+        choppiness = c.get(m, "crista", choppiness, "0 a 1: quanto as cristas se aguçam")
+            .getDouble();
+        components = c.get(m, "componentes", components, "Quantas ondas somadas (8 a 256)")
+            .getInt();
+        seed = Long.decode(c.getString("semente", m, "0x0CEA17", "Semente das fases e direções"));
+        seaLevel = c.get(m, "nivel", seaLevel, "Nível do mar (o bloco de água mais alto é nivel - 1)")
+            .getInt();
+        dimensions.clear();
+        for (int d : c.get(m, "dimensoes", new int[] { 0 }, "Dimensões com ondas")
+            .getIntList()) {
+            dimensions.add(d);
+        }
+        String s = "costa";
+        shoreWidth = c.get(s, "largura", shoreWidth, "Em quantos blocos as ondas morrem perto da costa")
+            .getDouble();
+        breakerIndex = c.get(s, "quebra", breakerIndex, "Altura máxima da onda sobre a profundidade (McCowan: 0,78)")
+            .getDouble();
+        String r = "desenho";
+        c.setCategoryComment(r, "Só do cliente.");
+        render = c.get(r, "ligado", render, "Desenhar as ondas")
+            .getBoolean();
+        minSpacing = c.get(r, "espacamento", minSpacing, "Espaçamento da malha perto da câmera, blocos (0,5 ou 1)")
+            .getDouble();
+        lodFactor = c
+            .get(r, "detalhe", lodFactor, "Espaçamento por bloco de distância (menor: mais detalhe longe, mais caro)")
+            .getDouble();
+        alpha = (float) c.get(r, "opacidade", alpha, "Opacidade da superfície")
+            .getDouble();
+        shading = c.get(r, "sombreamento", shading, "Luz do sol e do céu na superfície (sem shader)")
+            .getBoolean();
+        foam = c.get(r, "espuma", foam, "Espuma nas cristas")
+            .getBoolean();
+        specular = c.get(r, "brilho", specular, "Reflexo do sol")
+            .getBoolean();
+        rebuildsPerFrame = c.get(r, "chunksPorQuadro", rebuildsPerFrame, "Chunks de mar relidos por quadro")
+            .getInt();
+        if (c.hasChanged()) {
+            c.save();
+        }
+    }
+
+    /** O estado de mar da configuração. */
+    public static SeaState seaState() {
+        SeaState s = SeaPresets.all()
+            .getOrDefault(preset, SeaPresets.get("moderado"));
+        if (windSpeed >= 0) {
+            s = s.withWind(windSpeed, windDirection);
+        } else {
+            s = s.withWind(s.windSpeed, windDirection);
+        }
+        return s.withScale(heightScale)
+            .withLengthScale(lengthScale)
+            .withChoppiness(choppiness)
+            .withComponents(Math.max(8, Math.min(256, components)))
+            .withSeed(seed);
+    }
+}

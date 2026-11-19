@@ -10,7 +10,8 @@
   "client": [
     "client.BlockLiquidTopFaceMixin",
     "client.RenderGlobalOceanPassMixin",
-    "client.NetHandlerPlayClientTimeMixin"
+    "client.NetHandlerPlayClientTimeMixin",
+    "client.TextureAtlasSpriteAccessor"
   ],
   "server": []
 }
