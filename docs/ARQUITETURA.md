@@ -116,7 +116,11 @@ dele que toca no OceanWaves), assim:
    linha d'água no nível do mar do mod; fora disso o plugin usa o mar próprio dele. Sem o mod no servidor (ou com a
    API 1), nada muda no Expeditions.
 
-**[a fazer]** O amortecimento pode usar a velocidade da água (`WaveSample.vx/vy/vz`) em vez da do navio sozinha.
+6. **No plano** (avanço, deriva e guinada; `ShipMotion` no Expeditions): as mesmas componentes do OceanWaves
+   (`WaveSet` com a profundidade do `SeaState`) dão a oscilação (Froude-Krylov + massa adicional sobre o volume
+   submerso), a deriva média (reflexão de Ursell na linha d'água) e a deriva de Stokes; a atenuação da costa e da região
+   (`shore(...).at(cg)`) multiplica as amplitudes. O arrasto é sobre a velocidade relativa à água. Documento:
+   `docs/DERIVA.md` do Expeditions.
 
 ## Desempenho medido
 

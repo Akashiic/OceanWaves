@@ -45,7 +45,7 @@ O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUI
 | Mirai, modo de compatibilidade (DragonAPI sem Angelica) | **a verificar** |
 | Desempenho numa placa de vídeo | **a verificar**; sem GPU, 8 chunks: ~8 a 10 ms por quadro no ambiente de desenvolvimento, ~6 a 20 ms no pack real |
 | Mundos com ondas: só os da configuração, pelo nome (padrão: `Akashic/Spawn`, o spawn do servidor), no mundo inteiro | feito e **visto** no servidor do Forbidden com o cliente TEOF: ondas no `Akashic/Spawn`, água vanilla no `world` ([relatório](docs/TESTES-AMBIENTE-REAL.md)). Opcional: limitar a um círculo (`regiao`), com a borda tratada como costa |
-| Navios do Expeditions nas ondas | feito no Expeditions (branch `claude/minecraft-ocean-physics-mod-n82b79`, `OceanWavesSea`); **visto**: o galeão subindo, caturrando e balançando com as ondas do `Akashic/Spawn` no servidor do Forbidden ([como](docs/ARQUITETURA.md#navios-expeditions)) |
+| Navios do Expeditions nas ondas | feito no Expeditions (branch `claude/minecraft-ocean-physics-mod-n82b79`, `OceanWavesSea`); **visto**: o galeão subindo, caturrando e balançando com as ondas do `Akashic/Spawn` no servidor do Forbidden; e agora à deriva no plano (avanço, deriva e guinada pelas mesmas componentes: oscilação, deriva média, Stokes; vento, âncora, fundo; [DERIVA.md do Expeditions](https://github.com/Akashiic/Expeditions/blob/claude/minecraft-ocean-physics-mod-n82b79/docs/DERIVA.md)) ([como](docs/ARQUITETURA.md#navios-expeditions)) |
 | Barcos vanilla, entidades, névoa submersa, esteiras, camada GPU | próximas fases |
 
 ## Usar
