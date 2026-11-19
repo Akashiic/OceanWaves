@@ -1,6 +1,7 @@
 package com.akashic.oceanwaves.net;
 
 import com.akashic.oceanwaves.OceanWavesMod;
+import com.akashic.oceanwaves.core.SeaRegion;
 import com.akashic.oceanwaves.core.SeaState;
 
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
@@ -14,13 +15,15 @@ import io.netty.buffer.ByteBuf;
  */
 public final class MessageSeaState implements IMessage {
 
-    public static final int VERSION = 1;
+    /** 2: a região (onde há ondas) no fim. Um cliente da versão 1 lê o começo e ignora o resto. */
+    public static final int VERSION = 2;
 
     public int dimension;
     public SeaState state;
     public int seaLevel;
     public double shoreWidth;
     public double breakerIndex;
+    public SeaRegion region = SeaRegion.EVERYWHERE;
 
     public MessageSeaState() {}
 
@@ -30,6 +33,12 @@ public final class MessageSeaState implements IMessage {
         this.seaLevel = seaLevel;
         this.shoreWidth = shoreWidth;
         this.breakerIndex = breakerIndex;
+    }
+
+    public MessageSeaState(int dimension, SeaState state, int seaLevel, double shoreWidth, double breakerIndex,
+        SeaRegion region) {
+        this(dimension, state, seaLevel, shoreWidth, breakerIndex);
+        this.region = region == null ? SeaRegion.EVERYWHERE : region;
     }
 
     @Override
@@ -47,6 +56,9 @@ public final class MessageSeaState implements IMessage {
         buf.writeInt(seaLevel);
         buf.writeDouble(shoreWidth);
         buf.writeDouble(breakerIndex);
+        for (double d : region.toArray()) {
+            buf.writeDouble(d);
+        }
     }
 
     @Override
@@ -68,6 +80,15 @@ public final class MessageSeaState implements IMessage {
         seaLevel = buf.readInt();
         shoreWidth = buf.readDouble();
         breakerIndex = buf.readDouble();
+        if (version >= 2 && buf.readableBytes() >= 32) {
+            double[] r = new double[4];
+            for (int i = 0; i < 4; i++) {
+                r[i] = buf.readDouble();
+            }
+            region = SeaRegion.fromArray(r);
+        } else {
+            region = SeaRegion.EVERYWHERE;
+        }
     }
 
     public static final class Handler implements IMessageHandler<MessageSeaState, IMessage> {

@@ -159,11 +159,13 @@ final class OceanChunks implements IWorldAccess {
         }
         int y = ClientSea.seaLevel() - 1;
         int bx = c.cx << 4, bz = c.cz << 4;
+        com.akashic.oceanwaves.core.SeaRegion region = ClientSea.region();
+        boolean inRegion = region.touches(bx, bz, bx + 15, bz + 15);
         for (int z = 0; z < 16; z++) {
             for (int x = 0; x < 16; x++) {
                 int i = z * 16 + x;
                 int wx = bx + x, wz = bz + z;
-                boolean o = OceanColumns.isOpenSea(w, wx, y, wz);
+                boolean o = inRegion && region.containsColumn(wx, wz) && OceanColumns.isOpenSea(w, wx, y, wz);
                 c.open[i] = o;
                 if (o) {
                     c.any = true;
@@ -224,13 +226,15 @@ final class OceanChunks implements IWorldAccess {
         boolean[] open = new boolean[size * size];
         float[] depth = new float[size * size];
         int ox = (c.cx << 4) - m, oz = (c.cz << 4) - m;
+        com.akashic.oceanwaves.core.SeaRegion region = ClientSea.region();
         for (int z = 0; z < size; z++) {
             for (int x = 0; x < size; x++) {
                 int wx = ox + x, wz = oz + z;
                 Column n = map.get(key(wx >> 4, wz >> 4));
                 int i = z * size + x;
                 if (n == null || n.dirty || !n.loaded) {
-                    open[i] = true;
+                    // desconhecido conta como mar, menos fora da região (a borda dela é costa)
+                    open[i] = region.containsColumn(wx, wz);
                     depth[i] = 64;
                 } else {
                     int j = (wz & 15) * 16 + (wx & 15);

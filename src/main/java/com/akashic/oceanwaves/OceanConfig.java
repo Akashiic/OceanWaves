@@ -29,6 +29,12 @@ public final class OceanConfig {
     public static int seaLevel = 63;
     public static Set<Integer> dimensions = new HashSet<>();
 
+    // região
+    public static String regionMode = "spawn";
+    public static double regionRadius = 384;
+    public static double regionX = 0;
+    public static double regionZ = 0;
+
     // costa
     public static double shoreWidth = 10;
     public static double breakerIndex = 0.78;
@@ -93,6 +99,19 @@ public final class OceanConfig {
             .getIntList()) {
             dimensions.add(d);
         }
+        String g = "regiao";
+        c.setCategoryComment(g, "Onde há ondas. Fora da região a água continua a vanilla (vale pelo servidor).");
+        regionMode = c.getString(
+            "modo",
+            g,
+            regionMode,
+            "spawn: em volta do spawn do mundo; ponto: em volta de (x, z); tudo: o mundo todo");
+        regionRadius = c.get(g, "raio", regionRadius, "Raio da região em blocos (spawn e ponto)")
+            .getDouble();
+        regionX = c.get(g, "x", regionX, "Centro da região no modo ponto")
+            .getDouble();
+        regionZ = c.get(g, "z", regionZ, "Centro da região no modo ponto")
+            .getDouble();
         String s = "costa";
         shoreWidth = c.get(s, "largura", shoreWidth, "Em quantos blocos as ondas morrem perto da costa")
             .getDouble();
@@ -132,6 +151,39 @@ public final class OceanConfig {
             .getInt();
         if (c.hasChanged()) {
             c.save();
+        }
+    }
+
+    /** Grava a região (o /ondas regiao muda e guarda para o próximo início). */
+    public static void saveRegion(String mode, double radius, double x, double z) {
+        regionMode = mode;
+        regionRadius = radius;
+        regionX = x;
+        regionZ = z;
+        if (file == null) {
+            return;
+        }
+        file.get("regiao", "modo", mode)
+            .set(mode);
+        file.get("regiao", "raio", radius)
+            .set(radius);
+        file.get("regiao", "x", x)
+            .set(x);
+        file.get("regiao", "z", z)
+            .set(z);
+        file.save();
+    }
+
+    /** A região da configuração, com o spawn da dimensão (spawnX, spawnZ) para o modo spawn. */
+    public static com.akashic.oceanwaves.core.SeaRegion region(double spawnX, double spawnZ) {
+        double r = Math.max(16, regionRadius);
+        switch (regionMode == null ? "" : regionMode.toLowerCase(java.util.Locale.ROOT)) {
+            case "tudo":
+                return com.akashic.oceanwaves.core.SeaRegion.EVERYWHERE;
+            case "ponto":
+                return com.akashic.oceanwaves.core.SeaRegion.circle(regionX, regionZ, r);
+            default:
+                return com.akashic.oceanwaves.core.SeaRegion.circle(spawnX + 0.5, spawnZ + 0.5, r);
         }
     }
 

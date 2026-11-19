@@ -7,6 +7,7 @@ import net.minecraft.world.World;
 import com.akashic.oceanwaves.OceanConfig;
 import com.akashic.oceanwaves.OceanWavesMod;
 import com.akashic.oceanwaves.core.OceanClock;
+import com.akashic.oceanwaves.core.SeaRegion;
 import com.akashic.oceanwaves.core.SeaState;
 import com.akashic.oceanwaves.core.Synthesis;
 import com.akashic.oceanwaves.core.WaveSet;
@@ -27,6 +28,7 @@ public final class ClientSea {
     private static volatile SeaState state;
     private static volatile WaveSet waves = WaveSet.empty();
     private static volatile int version;
+    private static volatile SeaRegion region = SeaRegion.EVERYWHERE;
     private static double shoreWidth = 10;
     private static double breakerIndex = 0.78;
     private static boolean fromServer;
@@ -94,7 +96,12 @@ public final class ClientSea {
 
     /** A face de cima da água vanilla some onde o mod desenha a superfície. Chamado na montagem de chunks. */
     public static boolean hideTopFace(IBlockAccess w, int x, int y, int z) {
-        return active && y == seaLevel - 1 && OceanColumns.isOpenSea(w, x, y, z);
+        return active && y == seaLevel - 1 && region.containsColumn(x, z) && OceanColumns.isOpenSea(w, x, y, z);
+    }
+
+    /** Onde há ondas (fora dela a água é a vanilla). */
+    public static SeaRegion region() {
+        return region;
     }
 
     /** A cada tick do cliente. */
@@ -115,7 +122,8 @@ public final class ClientSea {
             shoreWidth = m.shoreWidth;
             breakerIndex = m.breakerIndex;
             setState(m.state);
-            OceanWavesMod.LOG.info("Mar do servidor (dimensão {}): {}", m.dimension, m.state);
+            setRegion(mc, m.region);
+            OceanWavesMod.LOG.info("Mar do servidor (dimensão {}): {}; ondas em {}", m.dimension, m.state, m.region);
         } else if (w != null && !fromServer && w.provider.dimensionId != dimension) {
             // servidor sem o mod: o mar da configuração do cliente
             dimension = w.provider.dimensionId;
@@ -123,6 +131,8 @@ public final class ClientSea {
             shoreWidth = OceanConfig.shoreWidth;
             breakerIndex = OceanConfig.breakerIndex;
             setState(OceanConfig.dimensions.contains(dimension) ? OceanConfig.seaState() : null);
+            net.minecraft.util.ChunkCoordinates spawn = w.getSpawnPoint();
+            setRegion(mc, OceanConfig.region(spawn.posX, spawn.posZ));
         }
         boolean want = w != null && OceanConfig.render && state != null && waves.count > 0;
         if (want != active) {
@@ -131,6 +141,18 @@ public final class ClientSea {
             if (mc.renderGlobal != null && w != null) {
                 mc.renderGlobal.loadRenderers();
             }
+        }
+    }
+
+    /** A região mudou: a face de cima da água vanilla muda junto, então os chunks são remontados. */
+    private static void setRegion(Minecraft mc, SeaRegion r) {
+        if (r.equals(region)) {
+            return;
+        }
+        region = r;
+        version++;
+        if (active && mc.renderGlobal != null && mc.theWorld != null) {
+            mc.renderGlobal.loadRenderers();
         }
     }
 

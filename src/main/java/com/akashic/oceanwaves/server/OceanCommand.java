@@ -15,6 +15,7 @@ import com.akashic.oceanwaves.OceanConfig;
 import com.akashic.oceanwaves.api.OceanWaves;
 import com.akashic.oceanwaves.core.OceanField;
 import com.akashic.oceanwaves.core.SeaPresets;
+import com.akashic.oceanwaves.core.SeaRegion;
 import com.akashic.oceanwaves.core.SeaState;
 import com.akashic.oceanwaves.core.ShoreField;
 import com.akashic.oceanwaves.core.WaveSample;
@@ -36,6 +37,7 @@ public final class OceanCommand extends CommandBase {
         "componentes",
         "semente",
         "aqui",
+        "regiao",
         "ligar",
         "desligar");
 
@@ -56,7 +58,7 @@ public final class OceanCommand extends CommandBase {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/ondas <info|estado <nome>|vento <m/s> [graus]|altura <x>|escala <x>|crista <0-1>|componentes <n>|semente <n>|aqui|ligar|desligar>";
+        return "/ondas <info|estado <nome>|vento <m/s> [graus]|altura <x>|escala <x>|crista <0-1>|componentes <n>|semente <n>|aqui|regiao <spawn|aqui|tudo> [raio]|ligar|desligar>";
     }
 
     @Override
@@ -67,7 +69,10 @@ public final class OceanCommand extends CommandBase {
         int dim = sender.getEntityWorld().provider.dimensionId;
         SeaState s = OceanWaves.state(dim);
         String sub = args[0].toLowerCase(Locale.ROOT);
-        if (s == null && !sub.equals("ligar") && !sub.equals("info") && !sub.equals("estado")) {
+        if (s == null && !sub.equals("ligar")
+            && !sub.equals("info")
+            && !sub.equals("estado")
+            && !sub.equals("regiao")) {
             say(sender, "Sem ondas nesta dimensão. Use /ondas ligar.");
             return;
         }
@@ -121,6 +126,9 @@ public final class OceanCommand extends CommandBase {
             case "aqui":
                 here(sender, dim);
                 return;
+            case "regiao":
+                region(sender, dim, args);
+                return;
             case "ligar":
                 apply(sender, dim, s != null ? s : OceanConfig.seaState());
                 return;
@@ -131,6 +139,42 @@ public final class OceanCommand extends CommandBase {
             default:
                 throw new WrongUsageException(getCommandUsage(sender));
         }
+    }
+
+    /**
+     * {@code /ondas regiao} (mostra), {@code /ondas regiao spawn [raio]}, {@code /ondas regiao aqui [raio]} (em volta
+     * de quem chama), {@code /ondas regiao tudo}. Muda para todos na hora e grava na configuração.
+     */
+    private static void region(ICommandSender sender, int dim, String[] args) {
+        if (args.length < 2) {
+            say(sender, "Ondas em " + OceanWaves.region(dim) + ". Use /ondas regiao <spawn|aqui|tudo> [raio].");
+            return;
+        }
+        double radius = args.length > 2 ? num(args[2], 16, 100_000) : OceanConfig.regionRadius;
+        SeaRegion r;
+        switch (args[1].toLowerCase(Locale.ROOT)) {
+            case "tudo":
+                OceanConfig.saveRegion("tudo", radius, OceanConfig.regionX, OceanConfig.regionZ);
+                r = SeaRegion.EVERYWHERE;
+                break;
+            case "aqui": {
+                net.minecraft.util.ChunkCoordinates p = sender.getPlayerCoordinates();
+                OceanConfig.saveRegion("ponto", radius, p.posX + 0.5, p.posZ + 0.5);
+                r = SeaRegion.circle(p.posX + 0.5, p.posZ + 0.5, radius);
+                break;
+            }
+            case "spawn": {
+                net.minecraft.util.ChunkCoordinates s = sender.getEntityWorld()
+                    .getSpawnPoint();
+                OceanConfig.saveRegion("spawn", radius, OceanConfig.regionX, OceanConfig.regionZ);
+                r = SeaRegion.circle(s.posX + 0.5, s.posZ + 0.5, radius);
+                break;
+            }
+            default:
+                throw new WrongUsageException("/ondas regiao <spawn|aqui|tudo> [raio]");
+        }
+        ServerSea.INSTANCE.setRegion(dim, r);
+        say(sender, "Ondas agora em " + r + ".");
     }
 
     private static void apply(ICommandSender sender, int dim, SeaState s) {
@@ -152,6 +196,7 @@ public final class OceanCommand extends CommandBase {
             }
         }
         say(sender, s.toString());
+        say(sender, "Ondas em " + OceanWaves.region(dim) + ".");
         say(
             sender,
             String.format(

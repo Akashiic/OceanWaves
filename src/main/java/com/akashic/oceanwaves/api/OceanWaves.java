@@ -5,6 +5,7 @@ import net.minecraftforge.common.DimensionManager;
 
 import com.akashic.oceanwaves.OceanConfig;
 import com.akashic.oceanwaves.core.OceanField;
+import com.akashic.oceanwaves.core.SeaRegion;
 import com.akashic.oceanwaves.core.SeaState;
 import com.akashic.oceanwaves.core.ShoreField;
 import com.akashic.oceanwaves.core.WaveSample;
@@ -37,6 +38,14 @@ public final class OceanWaves {
         return ServerSea.INSTANCE.waves(dimension);
     }
 
+    /**
+     * Onde há ondas na dimensão. Fora da região a superfície é a água parada ({@link #shore} já conta a borda como
+     * costa); um navio fora dela pode usar o nível de repouso direto.
+     */
+    public static SeaRegion region(int dimension) {
+        return ServerSea.INSTANCE.region(dimension);
+    }
+
     /** Troca o mar da dimensão (null: sem ondas) e avisa os clientes. */
     public static void setState(int dimension, SeaState state) {
         ServerSea.INSTANCE.set(dimension, state);
@@ -66,16 +75,17 @@ public final class OceanWaves {
         boolean[] open = new boolean[width * height];
         float[] depth = new float[width * height];
         int y = OceanConfig.seaLevel - 1;
+        SeaRegion region = region(dimension);
         for (int z = 0; z < height; z++) {
             for (int x = 0; x < width; x++) {
                 int wx = minX + x, wz = minZ + z, i = z * width + x;
                 if (w == null || !w.getChunkProvider()
                     .chunkExists(wx >> 4, wz >> 4)) {
-                    open[i] = true;
+                    open[i] = region.containsColumn(wx, wz);
                     depth[i] = 64;
                     continue;
                 }
-                open[i] = OceanColumns.isOpenSea(w, wx, y, wz);
+                open[i] = region.containsColumn(wx, wz) && OceanColumns.isOpenSea(w, wx, y, wz);
                 depth[i] = open[i] ? OceanColumns.depth(w, wx, y, wz, 64) : 0;
             }
         }
