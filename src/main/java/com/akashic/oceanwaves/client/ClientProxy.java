@@ -58,6 +58,13 @@ public final class ClientProxy extends CommonProxy {
         ClientSea.tick(mc);
     }
 
+    @SubscribeEvent
+    public void onRenderTick(TickEvent.RenderTickEvent e) {
+        if (e.phase == TickEvent.Phase.START) {
+            OceanRenderer.INSTANCE.newFrame();
+        }
+    }
+
     /** Linhas no F3: o mar, o relógio e quanto custa. */
     @SubscribeEvent
     public void onDebugText(RenderGameOverlayEvent.Text e) {

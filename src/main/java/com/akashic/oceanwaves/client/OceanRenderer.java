@@ -17,6 +17,7 @@ import org.lwjgl.opengl.GL11;
 
 import com.akashic.oceanwaves.OceanConfig;
 import com.akashic.oceanwaves.OceanWavesMod;
+import com.akashic.oceanwaves.core.Attenuation;
 import com.akashic.oceanwaves.core.FloatBuffer;
 import com.akashic.oceanwaves.core.OceanMesher;
 import com.akashic.oceanwaves.core.SpectralLod;
@@ -44,6 +45,8 @@ public final class OceanRenderer {
     private final List<OceanChunks.Column> visible = new ArrayList<>();
     private final double[] neighbours = new double[4];
     private final SurfaceShader shader = new SurfaceShader();
+    private final ViewCone cone = new ViewCone();
+    private final EdgeFade edge = new EdgeFade();
     private OceanMesher mesher;
     private int meshedVersion = -1;
     private boolean failed;
@@ -93,6 +96,7 @@ public final class OceanRenderer {
     }
 
     void resetAverages() {
+        calls = 0;
         avgMesh = lastMeshNanos;
         avgDraw = lastDrawNanos;
         avgGl = lastGlNanos;
@@ -110,16 +114,26 @@ public final class OceanRenderer {
         return avgDraw / 1e6;
     }
 
+    // diagnóstico (harness): chamadas, programa GL e fase do Iris no último desenho
+    int calls;
+    int lastProgram = -1;
+    String lastPhase = "?";
+    double lastCamX, lastCamZ;
+
     /** Chamado no fim do passe 1 do terreno. */
     public void render(float partialTicks) {
         if (failed || !ClientSea.active()) {
             return;
         }
-        if (ShaderPacks.inUse() && ShaderPacks.renderingShadowPass()) {
+        boolean shadow = ShaderPacks.inUse() && ShaderPacks.renderingShadowPass();
+        if (shadow && !OceanConfig.waterShadows) {
             return;
         }
+        if (!shadow) {
+            calls++;
+        }
         try {
-            draw(partialTicks);
+            draw(partialTicks, shadow);
         } catch (RuntimeException e) {
             // nunca derrubar o jogo por causa do mar: desliga e explica
             failed = true;
@@ -127,7 +141,20 @@ public final class OceanRenderer {
         }
     }
 
-    private void draw(float partial) {
+    /*
+     * Com shaderpack o passe translúcido do terreno roda também na passagem de sombra. Ali o mar vai com uma malha
+     * grossa própria (células de 4 blocos ou mais: o mapa de sombra tem pouca resolução, e com shaderpack cada vértice
+     * custa caro no Tessellator do Angelica), sem recorte da câmera (a luz vê o que a câmera não vê).
+     */
+    private long frame;
+    private final FloatBuffer shadowBuffer = new FloatBuffer();
+
+    /** Um quadro novo (RenderTickEvent). */
+    public void newFrame() {
+        frame++;
+    }
+
+    private void draw(float partial, boolean shadow) {
         Minecraft mc = Minecraft.getMinecraft();
         World world = mc.theWorld;
         EntityLivingBase view = mc.renderViewEntity;
@@ -142,10 +169,11 @@ public final class OceanRenderer {
             chunks.invalidateAll();
         }
         double camX = RenderManager.renderPosX, camY = RenderManager.renderPosY, camZ = RenderManager.renderPosZ;
+        lastCamX = camX;
+        lastCamZ = camZ;
         double rest = ClientSea.restLevel();
         double t = ClientSea.time(partial);
         long t0 = System.nanoTime();
-
         int radius = mc.gameSettings.renderDistanceChunks;
         int ccx = (int) Math.floor(camX) >> 4, ccz = (int) Math.floor(camZ) >> 4;
         chunks.prune(ccx, ccz, radius);
@@ -154,6 +182,10 @@ public final class OceanRenderer {
         double reach = waves.maxAmplitude + waves.meanLevel + 1;
         visible.clear();
         boolean shaders = ShaderPacks.inUse();
+        if (shaders) {
+            cone.set(mc, view, partial, camX, camY, camZ);
+        }
+        double coneRadius = Math.sqrt(12 * 12 * 2 + reach * reach);
         int rebuilds = 0;
         // Do mais perto para o mais longe, com um orçamento de tempo (não de contagem): a face de cima da água
         // vanilla já some em todo chunk de mar, então cada chunk ainda não lido é um buraco; num quadro lento (PC
@@ -165,6 +197,9 @@ public final class OceanRenderer {
             int dx = order[o], dz = order[o + 1];
             {
                 OceanChunks.Column c = chunks.get(ccx + dx, ccz + dz);
+                if (!c.dirty && chunks.arrived(c)) {
+                    c.dirty = true;
+                }
                 if (c.dirty) {
                     if (rebuilds >= OceanConfig.rebuildsPerFrame && dx * dx + dz * dz > 4
                         && System.nanoTime() > budget) {
@@ -182,9 +217,12 @@ public final class OceanRenderer {
                 // com shaderpack o Iris não atualiza o frustum vanilla (ClippingHelperImpl) para a câmera: visto no
                 // BSL,
                 // ele descartava quase todos os chunks. Ali o recorte fica com o pipeline do pack.
-                if (!shaders && !frustum.isBoundingBoxInFrustum(box)) {
-                    continue;
-                }
+                if (shadow) {
+                    // a luz vê o que a câmera não vê: tudo no alcance
+                } else if (shaders ? !cone.contains(x0 + 8, rest, z0 + 8, coneRadius)
+                    : !frustum.isBoundingBoxInFrustum(box)) {
+                        continue;
+                    }
                 visible.add(c);
             }
         }
@@ -198,41 +236,47 @@ public final class OceanRenderer {
         // a luz muda devagar: alguns chunks por quadro
         if (!visible.isEmpty()) {
             for (int i = 0; i < 3; i++) {
-                chunks.refreshLight(visible.get(Math.floorMod(chunks.nextLightCursor(), visible.size())));
+                OceanChunks.Column r = visible.get(Math.floorMod(chunks.nextLightCursor(), visible.size()));
+                // a cada volta, um dos três relê as colunas também (mudanças de bloco cujo aviso se perdeu)
+                if (i == 0) {
+                    chunks.refresh(r);
+                } else {
+                    chunks.refreshLight(r);
+                }
             }
         }
 
-        SpectralLod lod = new SpectralLod(
-            camX,
-            camY,
-            camZ,
-            rest,
-            OceanConfig.minSpacing,
-            OceanConfig.lodFactor,
-            2.5,
-            5.0);
+        double minSpacing = shadow ? Math.max(4, OceanConfig.minSpacing) : OceanConfig.minSpacing;
+        FloatBuffer buffer = shadow ? shadowBuffer : this.buffer;
+        SpectralLod lod = new SpectralLod(camX, camY, camZ, rest, minSpacing, OceanConfig.lodFactor, 2.5, 5.0);
         mesher.grid()
             .beginFrame(t, ccx - radius - 1, ccz - radius - 1, 2 * radius + 3, 2 * radius + 3, 16);
         shader.frame(world, view, partial, ShaderPacks.inUse(), texture.tint(), waves.significantHeight);
+        edge.frame(camX, camZ, radius * 16.0, waves);
         buffer.clear();
         int[] starts = new int[visible.size() + 1];
         int quads = 0;
         for (int i = 0; i < visible.size(); i++) {
             OceanChunks.Column c = visible.get(i);
             starts[i] = buffer.size;
-            double s = OceanMesher.spacingFor(lod, c.cx, c.cz, OceanConfig.minSpacing);
-            neighbours[0] = OceanMesher.spacingFor(lod, c.cx - 1, c.cz, OceanConfig.minSpacing);
-            neighbours[1] = OceanMesher.spacingFor(lod, c.cx + 1, c.cz, OceanConfig.minSpacing);
-            neighbours[2] = OceanMesher.spacingFor(lod, c.cx, c.cz - 1, OceanConfig.minSpacing);
-            neighbours[3] = OceanMesher.spacingFor(lod, c.cx, c.cz + 1, OceanConfig.minSpacing);
+            double s = OceanMesher.spacingFor(lod, c.cx, c.cz, minSpacing);
+            neighbours[0] = OceanMesher.spacingFor(lod, c.cx - 1, c.cz, minSpacing);
+            neighbours[1] = OceanMesher.spacingFor(lod, c.cx + 1, c.cz, minSpacing);
+            neighbours[2] = OceanMesher.spacingFor(lod, c.cx, c.cz - 1, minSpacing);
+            neighbours[3] = OceanMesher.spacingFor(lod, c.cx, c.cz + 1, minSpacing);
             shader.chunk(c, camX, camY, camZ, rest);
-            quads += mesher.mesh(c.cx, c.cz, s, neighbours, c.open, t, lod, c.shore, shader, buffer);
+            Attenuation att = OceanConfig.edgeFade ? edge.around(c.shore, c.cx * 16.0, c.cz * 16.0) : c.shore;
+            quads += mesher.mesh(c.cx, c.cz, s, neighbours, c.open, t, lod, att, shader, buffer);
         }
         starts[visible.size()] = buffer.size;
         long t1 = System.nanoTime();
 
-        submit(mc, world, partial, camX, camY, camZ, rest, starts);
+        submit(mc, world, partial, camX, camY, camZ, rest, starts, buffer);
         long t2 = System.nanoTime();
+        if (shadow) {
+            // as medidas do F3 e do harness são as da passagem principal
+            return;
+        }
 
         lastMeshNanos = t1 - t0;
         lastDrawNanos = t2 - t1;
@@ -249,8 +293,12 @@ public final class OceanRenderer {
         return dx * dx + dz * dz;
     }
 
+    private static double sq(double v) {
+        return v * v;
+    }
+
     private void submit(Minecraft mc, World world, float partial, double camX, double camY, double camZ, double rest,
-        int[] starts) {
+        int[] starts, FloatBuffer buffer) {
         boolean own = shader.own;
         boolean depthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
         boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
@@ -292,6 +340,8 @@ public final class OceanRenderer {
                 }
             }
             long d0 = System.nanoTime();
+            lastProgram = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL20.GL_CURRENT_PROGRAM);
+            lastPhase = IrisBridge.phase();
             tess.draw();
             lastGlNanos = System.nanoTime() - d0;
         } finally {

@@ -65,6 +65,17 @@ final class OceanChunks implements IWorldAccess {
         return map.size();
     }
 
+    /** {lidos, sujos, com mar} (diagnóstico). */
+    int[] census() {
+        int loaded = 0, dirty = 0, any = 0;
+        for (Column c : map.values()) {
+            loaded += c.loaded ? 1 : 0;
+            dirty += c.dirty ? 1 : 0;
+            any += c.any ? 1 : 0;
+        }
+        return new int[] { loaded, dirty, any };
+    }
+
     Column get(int cx, int cz) {
         return map.computeIfAbsent(key(cx, cz), k -> new Column(cx, cz));
     }
@@ -95,8 +106,45 @@ final class OceanChunks implements IWorldAccess {
         }
     }
 
+    /**
+     * Um chunk que ainda não tinha chegado chegou? Não dá para contar só com o aviso do mundo
+     * ({@code markBlockRangeForRenderUpdate}): com o Celeritas do Angelica ele não chega aos {@code IWorldAccess}
+     * registrados (visto no pack real: 213 chunks no cache, 15 lidos). Conferir é barato (uma busca no mapa de chunks).
+     */
+    boolean arrived(Column c) {
+        World w = world;
+        return w != null && !c.loaded
+            && !w.getChunkFromChunkCoords(c.cx, c.cz)
+                .isEmpty();
+    }
+
+    private final boolean[] oldOpen = new boolean[256];
+    private final float[] oldDepth = new float[256];
+
+    /**
+     * Relê um chunk já lido (rodízio, para mudanças cujo aviso se perdeu) e só refaz a costa dos vizinhos se as colunas
+     * mudaram de verdade.
+     */
+    void refresh(Column c) {
+        if (!c.loaded) {
+            return;
+        }
+        System.arraycopy(c.open, 0, oldOpen, 0, 256);
+        System.arraycopy(c.depth, 0, oldDepth, 0, 256);
+        boolean wasAny = c.any;
+        read(c, false);
+        if (c.any != wasAny || !java.util.Arrays.equals(oldOpen, c.open)
+            || !java.util.Arrays.equals(oldDepth, c.depth)) {
+            markShores(c);
+        }
+    }
+
     /** Relê as colunas de um chunk. Verdadeiro se leu (o chunk estava carregado). */
     boolean rebuild(Column c) {
+        return read(c, true);
+    }
+
+    private boolean read(Column c, boolean neighbours) {
         World w = world;
         c.dirty = false;
         if (w == null) {
@@ -127,7 +175,14 @@ final class OceanChunks implements IWorldAccess {
                 }
             }
         }
-        // a costa deste e dos vizinhos (até a folga máxima, 2 chunks) depende destas colunas
+        if (neighbours) {
+            markShores(c);
+        }
+        return true;
+    }
+
+    /** A costa deste chunk e dos vizinhos (até a folga máxima, 2 chunks) depende das colunas dele. */
+    private void markShores(Column c) {
         for (int dz = -2; dz <= 2; dz++) {
             for (int dx = -2; dx <= 2; dx++) {
                 Column n = map.get(key(c.cx + dx, c.cz + dz));
@@ -136,7 +191,6 @@ final class OceanChunks implements IWorldAccess {
                 }
             }
         }
-        return true;
     }
 
     /** Relê a luz de um chunk (a luz muda sem aviso barato: dia, tochas). */

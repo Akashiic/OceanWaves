@@ -65,6 +65,10 @@ reaproveitados); uma instância por thread de tudo que guarda estado de trabalho
   céu do raio refletido, do horizonte com o pôr do sol ao zênite, Blinn-Phong do sol ou da lua, tom das cristas,
   espuma; a luz da coluna pelo céu × brilho do dia ou pelas tochas). Com shaderpack (`ShaderPacks.inUse()`, por
   reflexão no Iris do Angelica **[a verificar]**), só a cor da água e a espuma, com o mapa de luz: o pack ilumina.
+* `IrisBridge`, `ShaderPacks`, `ViewCone`: a integração com os shaderpacks do Iris do Angelica (fase translúcida
+  forçada, material da água no `mc_Entity`, recorte por cone, desenho também na passagem de sombra com a malha
+  reaproveitada na principal). Ver [adr/ADR-0004](adr/ADR-0004-shaderpacks.md).
+* `EdgeFade`: as ondas morrem nos últimos chunks do alcance, para encontrar sem degrau a água plana distante do Mirai.
 * `WaterTexture`: o quadro atual da água parada do atlas copiado para uma textura própria com repetição, em tons de
   cinza (o detalhe), com o tom médio passado à cor do vértice: no GL fixo a cor do vértice é multiplicada pela
   textura, e uma textura azul apagaria o reflexo laranja do pôr do sol.

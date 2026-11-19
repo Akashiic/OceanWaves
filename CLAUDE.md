@@ -45,6 +45,13 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClie
   `stitchingClosesTJunctions`.
 * GL: sempre pelo `Tessellator` e pelos estados que o vanilla usa (o Angelica intercepta o GL; nada de
   `glPushAttrib`, programas próprios ou funções que o perfil core não tem). Guardar e devolver o estado mexido.
+* **Shaderpacks** (ADR-0004): o mar é desenhado com a fase `TERRAIN_TRANSLUCENT` forçada e o material da água no
+  `mc_Entity` (`IrisBridge`, por reflexão). O Angelica reescreve o `sortAndRender` e fecha a fase no fim: nada que
+  dependa da fase pode ser desenhado depois dele sem o override. Com shaderpack o frustum vanilla não serve (use o
+  `ViewCone`) e a passagem de sombra também chama o passe 1 (`ShaderPacks.renderingShadowPass`).
+* **Não conte com os avisos do mundo**: com o Celeritas o `markBlockRangeForRenderUpdate` não chega aos
+  `IWorldAccess` registrados. O cache confere por conta própria se um chunk chegou (`OceanChunks.arrived`) e relê em
+  rodízio.
 * Não quebrar o jogo: o renderizador desliga a si mesmo com um log se lançar exceção.
 * O que não foi verificado em jogo fica marcado **[a verificar]** nos documentos. O harness do ambiente de
   desenvolvimento roda sem GPU e sem o Angelica; o pack real (TEOF) e o servidor do Forbidden podem ser montados aqui

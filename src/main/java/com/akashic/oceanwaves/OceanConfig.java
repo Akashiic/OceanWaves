@@ -42,6 +42,8 @@ public final class OceanConfig {
     public static boolean foam = true;
     public static boolean specular = true;
     public static double relief = 2.0;
+    public static boolean edgeFade = true;
+    public static boolean waterShadows = true;
     public static int rebuildsPerFrame = 6;
 
     private OceanConfig() {}
@@ -112,6 +114,19 @@ public final class OceanConfig {
         foam = c.get(r, "espuma", foam, "Espuma nas cristas")
             .getBoolean();
         specular = c.get(r, "brilho", specular, "Reflexo do sol")
+            .getBoolean();
+        edgeFade = c.get(
+            r,
+            "bordaSuave",
+            edgeFade,
+            "As ondas morrem nos últimos chunks do alcance (encontram a água plana do Mirai/Distant Horizons sem degrau)")
+            .getBoolean();
+        waterShadows = c
+            .get(
+                r,
+                "sombraDaAgua",
+                waterShadows,
+                "Com shaderpack: o mar entra no mapa de sombra (sombra colorida e cáusticas embaixo d'água)")
             .getBoolean();
         rebuildsPerFrame = c.get(r, "chunksPorQuadro", rebuildsPerFrame, "Chunks de mar relidos por quadro")
             .getInt();

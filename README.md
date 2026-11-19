@@ -10,9 +10,10 @@ expansão marítima junto com o [Kunftig](https://github.com/Akashiic/Kunftig) e
 |---|---|
 | ![moderado](docs/img/ondas-moderado-alto.png) | ![tempestade](docs/img/ondas-tempestade-rente.png) |
 | ![costa](docs/img/ondas-costa.png) | ![pôr do sol](docs/img/ondas-por-do-sol.png) |
+| ![BSL](docs/img/real/bsl-tempestade.png) | ![Complementary](docs/img/real/compl-por-do-sol.png) |
 
-*Capturas do cliente de desenvolvimento (sem shaderpack, GL por software): mar moderado visto do alto, tempestade
-rente à água, as ondas morrendo no raso em volta de uma ilha, o reflexo do pôr do sol.*
+*As quatro de cima: cliente de desenvolvimento, sem shaderpack. As duas de baixo: o cliente TEOF 6.3 real com o BSL e
+com o Complementary (GL por software, sem placa de vídeo).*
 
 ## O que tem
 
@@ -40,7 +41,7 @@ O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUI
 | Mod: estado do mar no servidor, rede, `/ondas`, API | feito; **visto no servidor do Forbidden** (Crucible, 226 mods) e a API chamada de um plugin Bukkit ([relatório](docs/TESTES-AMBIENTE-REAL.md)) |
 | Desenho da superfície, face vanilla escondida, costa, luz | feito; **visto no cliente TEOF 6.3** (Angelica 2.2.43 sem shader, Neo States, 218 mods) |
 | Multijogador: o mesmo mar e o mesmo relógio | **visto**: cliente TEOF no Crucible, resumo das ondas igual nos dois lados, relógio assentando em 20 TPS |
-| Shaderpacks (BSL, Complementary) | **não integra ainda**: o mar não pega a luz do pack (teste inconclusivo sem GPU) |
+| Shaderpacks (BSL, Complementary) | **integrado e visto**: o mar passa pelo programa de água do pack (reflexos, refração, sombra) ([ADR-0004](docs/adr/ADR-0004-shaderpacks.md)) |
 | Mirai, modo de compatibilidade (DragonAPI sem Angelica) | **a verificar** |
 | Desempenho numa placa de vídeo | **a verificar**; sem GPU, 8 chunks: ~8 a 10 ms por quadro no ambiente de desenvolvimento, ~6 a 20 ms no pack real |
 | Navios do Expeditions nas ondas | API pronta; a troca no Expeditions é outro PR ([como](docs/ARQUITETURA.md#navios-expeditions)) |

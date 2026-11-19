@@ -95,21 +95,44 @@ O cliente entrou no servidor (FML aceitou as listas de mods) e o harness conduzi
    não atualizar para a câmera, e o mar podia rodar também na passagem de sombra. Agora pula a sombra
    (`IrisApi.isRenderingShadowPass`) e não usa o frustum vanilla com shaderpack. A imagem com o BSL não mudou (abaixo).
 
-## Shaderpack (BSL 8.2.09)
+## Shaderpacks: BSL e Complementary — integrados
 
-| sem a ponte | com a ponte, sem sombra e sem frustum vanilla |
+Na primeira rodada o mar saía em placas claras, sem a luz do pack. Lido o Angelica 2.2.43 (decompilado), as causas e
+a correção estão na [ADR-0004](adr/ADR-0004-shaderpacks.md): o mixin desenhava depois de o Angelica fechar a fase do
+passe translúcido (`setPhase(NONE)` no fim do `sortAndRender` reescrito), e o material da água de um desenho imediato
+vai no atributo `mc_Entity` (`BlockMaterialAttribute`, o caminho do bloco caindo), não no override da montagem de
+chunks. Com a fase `TERRAIN_TRANSLUCENT` forçada e o material da água, o pack desenha o mar com o `gbuffers_water` dele.
+
+| BSL 8.2.09 | Complementary Unbound r5.9.3 |
 |---|---|
-| ![bsl](img/real/teof-bsl-antes.png) | ![bsl](img/real/teof-bsl-depois.png) |
+| ![bsl](img/real/bsl-tempestade.png) | ![compl](img/real/compl-tempestade.png) |
+| ![bsl](img/real/bsl-costa.png) | ![compl](img/real/compl-costa.png) |
 
-**Inconclusivo, e o mar ainda não parece passar pelo programa de água do BSL**: sai claro, sem a luz e os reflexos do pack. Tentado: a ponte
-`IrisBridge` (por reflexão: `GbufferPrograms.pushOverridePhase(TERRAIN_TRANSLUCENT)` e
-`Iris.setShaderMaterialOverride(Blocks.water, 0)`, o caminho do Neo States); os dois ganchos existem no Angelica 2.2.43
-e foram chamados (`Ponte com o Iris: fase true, material true`), sem mudança visível. Só 9 a 17 chunks aparecem como
-placas claras; o resto da superfície sai na cor do céu, que pode ser a água do próprio BSL refletindo o céu (a água
-vanilla com o BSL sai igual) ou falta de superfície: com 15 a 18 quadros por caso não deu para separar. **Aberto**: descobrir como o Angelica escolhe o programa para o que o
-`Tessellator` desenha fora da montagem de chunks (ler o `TessellatorShaderPatch`/`ShaderManager` do Angelica), ou
-desenhar o mar como malha do Celeritas. Com o BSL em GL por software o quadro leva 0,6 a 0,9 s, então este teste só
-vale para a imagem.
+![pôr do sol no Complementary](img/real/compl-por-do-sol.png)
+
+Visto: transparência, reflexo do céu, brilho do sol, refração (o pilar e o fundo distorcidos sob a água), a cor de
+profundidade do pack no raso, a sombra do pilar, e as ondas do mod por baixo de tudo. O diagnóstico do harness
+confirma, no desenho: fase `TERRAIN_TRANSLUCENT`, um programa do pack ligado, 1 desenho por quadro.
+
+O que mais apareceu e foi corrigido nessas rodadas:
+
+* **Recorte com shaderpack**: o frustum vanilla descartava quase tudo (9 a 17 de 212 chunks); agora um cone de visão
+  próprio (`ViewCone`).
+* **Chunks que chegam depois**: com o Celeritas, o aviso `markBlockRangeForRenderUpdate` não chega a quem se registra
+  no mundo; um chunk lido antes de chegar ficava vazio para sempre (visto: 213 no cache, 15 lidos). Agora o cache
+  confere a cada quadro se ele chegou e relê alguns chunks em rodízio.
+* **Sombra da água**: a face vanilla escondida tirava a água do mapa de sombra do pack. Agora o mar é desenhado também
+  na passagem de sombra, com uma malha grossa própria (células de 4 blocos ou mais).
+* **Borda com o Distant Horizons (Mirai)**: as ondas morrem nos últimos chunks do alcance para encontrar a água plana
+  distante sem degrau (`desenho.bordaSuave`).
+
+Uma rodada do Complementary deixou quase todo o mar sem chunks: o próprio mundo do cliente só tinha 18 chunks
+carregados (o pack em GL por software e o Distant Horizons ocupando os 4 núcleos, o servidor integrado sem CPU para
+mandar os chunks). Com mais tempo de carga, o cache leu os 213 a 247 chunks. É limitação deste contêiner, não do mod.
+
+Desempenho com shaderpack aqui não diz nada (0,3 a 1 s por quadro em GL por software). Um dado vale registrar: o
+envio dos vértices pelo `Tessellator` do Angelica com shaderpack custa muitas vezes mais que sem (ADR-0004,
+"Custo"). **[a verificar]** numa placa de vídeo.
 
 ## Para pôr no servidor de verdade
 

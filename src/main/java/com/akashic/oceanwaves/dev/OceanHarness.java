@@ -387,6 +387,13 @@ public final class OceanHarness {
                 OceanStats.glMs(),
                 OceanStats.chunks(),
                 OceanStats.quads()));
+        report(
+            "    " + OceanStats.diagnostics(f.length)
+                + String.format(
+                    Locale.ROOT,
+                    ", jogador (%.1f, %.1f)",
+                    Minecraft.getMinecraft().thePlayer.posX,
+                    Minecraft.getMinecraft().thePlayer.posZ));
     }
 
     private void report(String line) {
