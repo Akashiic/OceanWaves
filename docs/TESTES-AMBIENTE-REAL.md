@@ -104,6 +104,24 @@ dois mundos, para comparar). O Crucible guarda os mundos de plugin dentro do pri
 **[a verificar]** no servidor de verdade: o mundo `Akashic/Spawn` com o terreno dele (aqui foi uma cópia do `world`),
 e o casamento visual do navio com a onda numa placa de vídeo (aqui, 4 a 7 quadros por segundo em GL por software).
 
+### 5. O spawn de verdade do TEOF (Akashic/Spawn) — verificado
+
+O mundo `Akashic/Spawn` do servidor (enviado pelo dono) é um mar feito sobre o vazio por um conversor ("void to ocean",
+preset `2;31x9;0;`): 31 camadas de água de y 0 a 30, o vazio embaixo, a ilha do spawn no meio. Com o nível do mar 63 do
+padrão o mod não reconhecia aquela água como mar: **não havia ondas** ("não mudou nada", no servidor de verdade).
+
+Correção (`8b71472`): cada mundo tem o seu nível do mar, o da configuração (`Akashic/Spawn@31`, o novo padrão) ou o
+medido pelo servidor em volta do spawn. Teste com o mundo de verdade e o `oceanwaves.cfg` que o pacote anterior gerou
+(`Akashic/Spawn` sem o `@`, `nivel = 63`), o pior caso:
+
+* `Ondas no mundo Akashic/Spawn (dimensão 2): o mundo todo, nível do mar 63 (o geral, até dar para medir)` ao carregar
+  (os chunks do spawn ainda não estavam carregados) e, 15 s depois, `Nível do mar de Akashic/Spawn medido: 31`.
+* No cliente: `/ondas info` diz `Ondas em: Akashic/Spawn (dimensão 2, nível do mar 31)`; `/ondas aqui` acha a
+  superfície em Y 30,87; o mar em volta da ilha com ondas; o galeão do Expeditions posto no mar ao norte, fundeado
+  (o fundo é o chão do mundo, y 0: 256 m de amarra), balançando com elas.
+
+![spawn](img/real/teof-spawn-real-navio.png)
+
 ## Defeitos que só o ambiente real mostrou (corrigidos)
 
 1. **Fresta na borda de chunk sobre o terreno real** (a linha escura reta da esquerda). Cada chunk calcula a atenuação
