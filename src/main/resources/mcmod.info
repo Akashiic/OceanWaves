@@ -1,0 +1,21 @@
+{
+	"modListVersion": 2,
+	"modList": [{
+		"modid": "${modId}",
+		"name": "${modName}",
+		"description": "Ondas oceânicas tridimensionais para o 1.7.10: espectro físico (JONSWAP), superfície contínua com cristas, normais e espuma, e o mesmo mar no servidor e no cliente para a física de barcos e navios.",
+		"version": "${modVersion}",
+		"mcversion": "${minecraftVersion}",
+		"url": "https://github.com/Akashiic/OceanWaves",
+		"updateUrl": "",
+		"authorList": ["Akashiic"],
+		"credits": "",
+		"logoFile": "",
+		"screenshots": [],
+		"parent": "",
+		"requiredMods": [],
+		"dependencies": [],
+		"dependants": [],
+		"useDependencyInformation": false
+	}]
+}

@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8.5-GTNH",
+  "package": "com.akashic.oceanwaves.mixin.mixins",
+  "plugin": "com.akashic.oceanwaves.mixin.OceanMixinPlugin",
+  "refmap": "mixins.oceanwaves.refmap.json",
+  "target": "@env(DEFAULT)",
+  "compatibilityLevel": "JAVA_8",
+  "mixins": [],
+  "client": [
+    "client.BlockLiquidTopFaceMixin",
+    "client.RenderGlobalOceanPassMixin",
+    "client.NetHandlerPlayClientTimeMixin"
+  ],
+  "server": []
+}
