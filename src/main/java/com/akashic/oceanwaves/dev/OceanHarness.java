@@ -47,10 +47,12 @@ public final class OceanHarness {
         { "fresco-rente", "fresco", 0.5, 64.6, 0.5, 200f, 3f, 6000L },
         { "tempestade-alto", "tempestade", 0.5, 78.0, 0.5, 200f, 14f, 6000L },
         { "tempestade-rente", "tempestade", 0.5, 65.5, 0.5, 200f, 2f, 6000L },
-        { "costa", "fresco", 40.5, 70.0, 0.5, 90f, 22f, 6000L },
+        { "costa", "fresco", 36.5, 70.0, 0.5, 270f, 18f, 6000L },
         { "por-do-sol", "moderado", 0.5, 66.0, 0.5, 90f, 4f, 12600L },
         { "calmo", "calmo", 0.5, 64.5, 0.5, 200f, 8f, 6000L },
-        { "de-cima", "moderado", 0.5, 110.0, 0.5, 200f, 70f, 6000L } };
+        { "de-cima", "moderado", 0.5, 110.0, 0.5, 200f, 70f, 6000L },
+        // a linha de base: a mesma câmera de "moderado-alto" com a água vanilla (sem ondas)
+        { "vanilla-alto", null, 0.5, 74.0, 0.5, 200f, 18f, 6000L } };
 
     private final List<Object[]> cases = new ArrayList<>();
     private final List<String> report = new ArrayList<>();
@@ -108,6 +110,7 @@ public final class OceanHarness {
             mc.gameSettings.enableVsync = false;
             mc.gameSettings.renderDistanceChunks = 8;
             mc.gameSettings.fancyGraphics = true;
+            mc.gameSettings.showInventoryAchievementHint = false;
             mc.mouseHelper = new net.minecraft.util.MouseHelper() {
 
                 @Override
@@ -188,8 +191,9 @@ public final class OceanHarness {
     private void begin(Minecraft mc, EntityPlayerMP p, WorldServer ws, Object[] c) {
         OceanWaves.setState(
             0,
-            SeaPresets.get((String) c[1])
-                .withSeed(0x0CEA17L));
+            c[1] == null ? null
+                : SeaPresets.get((String) c[1])
+                    .withSeed(0x0CEA17L));
         ws.setWorldTime((Long) c[7]);
         frames.clear();
         lastFrame = 0;
@@ -241,14 +245,15 @@ public final class OceanHarness {
         report(
             String.format(
                 Locale.ROOT,
-                "%-17s %4d quadros, quadro médio %6.2f ms (p50 %6.2f, p99 %6.2f) | mar: malha %5.2f ms, envio %5.2f ms, %3d chunks, %6d quads",
+                "%-17s %4d quadros, quadro médio %6.2f ms (p50 %6.2f, p99 %6.2f) | mar: malha %5.2f ms, vértices %5.2f ms, GL %5.2f ms, %3d chunks, %6d quads",
                 c[0],
                 f.length,
                 mean,
                 p50,
                 p99,
                 OceanStats.meshMs(),
-                OceanStats.drawMs(),
+                OceanStats.drawMs() - OceanStats.glMs(),
+                OceanStats.glMs(),
                 OceanStats.chunks(),
                 OceanStats.quads()));
     }

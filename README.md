@@ -1,0 +1,83 @@
+# OceanWaves
+
+Ondas oceânicas tridimensionais para o **Minecraft 1.7.10** (Forge 10.13.4.1614), para o modpack TEOF: superfície
+contínua com cristas agudas, vales largos, normais, espuma e reflexos, e **o mesmo mar no servidor e em todos os
+clientes**, para a física de barcos e navios (o [Expeditions](https://github.com/Akashiic/Expeditions)). Parte da
+expansão marítima junto com o [Kunftig](https://github.com/Akashiic/Kunftig) e o
+[Neo States](https://github.com/Akashiic/Neo-States).
+
+| | |
+|---|---|
+| ![moderado](docs/img/ondas-moderado-alto.png) | ![tempestade](docs/img/ondas-tempestade-rente.png) |
+| ![costa](docs/img/ondas-costa.png) | ![pôr do sol](docs/img/ondas-por-do-sol.png) |
+
+*Capturas do cliente de desenvolvimento (sem shaderpack, GL por software): mar moderado visto do alto, tempestade
+rente à água, as ondas morrendo no raso em volta de uma ilha, o reflexo do pôr do sol.*
+
+## O que tem
+
+* **Mar físico**: espectro JONSWAP com espalhamento direcional de Donelan-Banner, mar de vento e marulho, fator de
+  profundidade TMA, escala de Froude (o mar real em maquete). A altura significativa sai do vento e da pista.
+* **Superfície trocoidal (Gerstner)** com garantia matemática de que **nunca dobra sobre si**, inclusive na costa, e
+  com o nível médio da água conservado.
+* **Determinístico**: o servidor manda 17 números; servidor (Java 21) e clientes (Java 8) sintetizam as mesmas
+  componentes bit a bit. O tempo é o do mundo, que o vanilla já sincroniza.
+* **Física**: a altura da água num ponto por Newton (convergência quadrática), retalho de alturas para cascos,
+  velocidade orbital, plano de mínimos quadrados para corpos pequenos; API para mods e plugins.
+* **Costa**: as ondas morrem pela distância exata à terra e pela profundidade (limite de quebra), calculadas dos
+  blocos reais, iguais no servidor e no cliente.
+* **Desenho**: malha por chunk com nível de detalhe espectral (sem frestas e sem estalos), a face de cima da água
+  vanilla escondida só onde há ondas, luz sem shader (Fresnel, brilho do sol, pôr do sol, tom das cristas, espuma),
+  e o caminho do `Tessellator` para o Angelica e os shaderpacks. Roda sem OpenGL moderno.
+
+O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUISA.md](docs/PESQUISA.md).
+
+## Estado
+
+| Parte | Estado |
+|---|---|
+| Núcleo matemático (`core/`) | feito, 40 testes, conferido no Java 8 e no 21 |
+| Mod: estado do mar no servidor, rede, `/ondas`, API | feito; **visto no cliente de desenvolvimento** (servidor integrado) |
+| Desenho da superfície, face vanilla escondida, costa, luz | feito; **visto no cliente de desenvolvimento** sem Angelica e sem GPU ([capturas](docs/img)) |
+| Relógio pelo pacote de tempo vanilla | feito e testado em unidade; em multijogador real, **a verificar** |
+| Angelica, shaderpacks (BSL, Complementary), Mirai, DragonAPI, Neo States | **a verificar** no pack real ([plano](docs/PLANO-DE-TESTES.md)) |
+| Desempenho numa placa de vídeo | **a verificar**; neste contêiner (sem GPU, 8 chunks) o mar custa ~8 a 10 ms por quadro |
+| Navios do Expeditions nas ondas | API pronta; a troca no Expeditions é outro PR ([como](docs/ARQUITETURA.md#navios-expeditions)) |
+| Barcos vanilla, entidades, névoa submersa, esteiras, camada GPU | próximas fases |
+
+## Usar
+
+`config/oceanwaves.cfg`: o mar (`mar`, `costa`) vale pelo servidor, que o manda aos clientes; o desenho
+(`desenho`) é de cada cliente. No jogo, operadores:
+
+```
+/ondas info
+/ondas estado <calmo|brisa|moderado|fresco|forte|tempestade|marulho>
+/ondas vento <m/s> [graus]      (0 = leste, 90 = sul)
+/ondas altura <x>   /ondas escala <x>   /ondas crista <0-1>   /ondas componentes <n>
+/ondas aqui                     (a água no seu ponto: altura, atenuação, inclinação, velocidade)
+/ondas ligar | desligar
+```
+
+F3 mostra o estado, o custo por quadro e o relógio. Chaves: `-Doceanwaves.disable=true` (mod inerte no cliente),
+`-Doceanwaves.topFace.disable=true` (a face vanilla volta, para depurar).
+
+## Build
+
+```bash
+./gradlew spotlessApply build -x javadoc      # núcleo + mod + testes; se o Maven Central der 429, --max-workers=1
+./gradlew :core:bench                         # medidas do núcleo
+```
+
+Harness visual (cliente de desenvolvimento, mundo plano de oceano, capturas e medidas):
+[docs/PLANO-DE-TESTES.md](docs/PLANO-DE-TESTES.md).
+
+## Documentos
+
+| Documento | Conteúdo |
+|---|---|
+| [docs/PESQUISA.md](docs/PESQUISA.md) | o ambiente, o oceano do Physics Mod, o estado da arte, onde igualamos e onde superamos |
+| [docs/MATEMATICA.md](docs/MATEMATICA.md) | as equações, as garantias e os testes que as conferem |
+| [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | as camadas, o desempenho, os navios, as próximas fases |
+| [docs/PLANO-DE-TESTES.md](docs/PLANO-DE-TESTES.md) | os testes, o harness e o que falta ver no jogo |
+| [docs/adr/](docs/adr/) | as decisões de arquitetura |

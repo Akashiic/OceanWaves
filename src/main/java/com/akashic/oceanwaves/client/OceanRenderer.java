@@ -11,7 +11,6 @@ import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.texture.TextureMap;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.util.AxisAlignedBB;
-import net.minecraft.util.Vec3;
 import net.minecraft.world.World;
 
 import org.lwjgl.opengl.GL11;
@@ -43,6 +42,8 @@ public final class OceanRenderer {
     private final WaterTexture texture = new WaterTexture();
     private final FloatBuffer buffer = new FloatBuffer();
     private final List<OceanChunks.Column> visible = new ArrayList<>();
+    private final double[] neighbours = new double[4];
+    private final SurfaceShader shader = new SurfaceShader();
     private OceanMesher mesher;
     private int meshedVersion = -1;
     private boolean failed;
@@ -50,6 +51,9 @@ public final class OceanRenderer {
     // medidas, para o F3
     long lastMeshNanos;
     long lastDrawNanos;
+    /** Só o {@code Tessellator.draw()} (o que o GL faz); o resto do envio é montar os vértices na CPU. */
+    long lastGlNanos;
+    private double avgGl;
     int lastChunks;
     int lastQuads;
     int lastComponents;
@@ -65,10 +69,15 @@ public final class OceanRenderer {
     void resetAverages() {
         avgMesh = lastMeshNanos;
         avgDraw = lastDrawNanos;
+        avgGl = lastGlNanos;
     }
 
     double averageMeshMs() {
         return avgMesh / 1e6;
+    }
+
+    double averageGlMs() {
+        return avgGl / 1e6;
     }
 
     double averageDrawMs() {
@@ -167,6 +176,7 @@ public final class OceanRenderer {
             5.0);
         mesher.grid()
             .beginFrame(t, ccx - radius - 1, ccz - radius - 1, 2 * radius + 3, 2 * radius + 3, 16);
+        shader.frame(world, view, partial, ShaderPacks.inUse(), texture.tint(), waves.significantHeight);
         buffer.clear();
         int[] starts = new int[visible.size() + 1];
         int quads = 0;
@@ -174,12 +184,17 @@ public final class OceanRenderer {
             OceanChunks.Column c = visible.get(i);
             starts[i] = buffer.size;
             double s = OceanMesher.spacingFor(lod, c.cx, c.cz, OceanConfig.minSpacing);
-            quads += mesher.mesh(c.cx, c.cz, s, c.open, t, lod, c.shore, buffer);
+            neighbours[0] = OceanMesher.spacingFor(lod, c.cx - 1, c.cz, OceanConfig.minSpacing);
+            neighbours[1] = OceanMesher.spacingFor(lod, c.cx + 1, c.cz, OceanConfig.minSpacing);
+            neighbours[2] = OceanMesher.spacingFor(lod, c.cx, c.cz - 1, OceanConfig.minSpacing);
+            neighbours[3] = OceanMesher.spacingFor(lod, c.cx, c.cz + 1, OceanConfig.minSpacing);
+            shader.chunk(c, camX, camY, camZ, rest);
+            quads += mesher.mesh(c.cx, c.cz, s, neighbours, c.open, t, lod, c.shore, shader, buffer);
         }
         starts[visible.size()] = buffer.size;
         long t1 = System.nanoTime();
 
-        submit(mc, world, view, partial, camX, camY, camZ, rest, starts);
+        submit(mc, world, partial, camX, camY, camZ, rest, starts);
         long t2 = System.nanoTime();
 
         lastMeshNanos = t1 - t0;
@@ -189,6 +204,7 @@ public final class OceanRenderer {
         lastComponents = waves.count;
         avgMesh += (lastMeshNanos - avgMesh) * 0.05;
         avgDraw += (lastDrawNanos - avgDraw) * 0.05;
+        avgGl += (lastGlNanos - avgGl) * 0.05;
     }
 
     private static double dist2(OceanChunks.Column c, double x, double z) {
@@ -196,28 +212,15 @@ public final class OceanRenderer {
         return dx * dx + dz * dz;
     }
 
-    private void submit(Minecraft mc, World world, EntityLivingBase view, float partial, double camX, double camY,
-        double camZ, double rest, int[] starts) {
-        // luz do sol: o mesmo giro do céu do vanilla (RenderGlobal.renderSky): Ry(−90°)·Rx(360°·ângulo)·(0, 1, 0)
-        double phi = world.getCelestialAngle(partial) * 2 * Math.PI;
-        float sx = (float) -Math.sin(phi), sy = (float) Math.cos(phi), sz = 0;
-        float sun = Math.max(0, Math.min(1, sy * 4 + 0.2f));
-        if (sy < 0) {
-            // a lua, do outro lado, bem mais fraca
-            sx = -sx;
-            sy = -sy;
-            sun = 0.25f * Math.max(0, Math.min(1, sy * 4));
-        }
-        sun *= 1 - 0.85f * world.getRainStrength(partial);
-        Vec3 sky = world.getSkyColor(view, partial);
-        float skyR = (float) sky.xCoord, skyG = (float) sky.yCoord, skyB = (float) sky.zCoord;
-        boolean shade = OceanConfig.shading, foamOn = OceanConfig.foam, spec = OceanConfig.specular;
-        float alpha = OceanConfig.alpha;
-
+    private void submit(Minecraft mc, World world, float partial, double camX, double camY, double camZ, double rest,
+        int[] starts) {
+        boolean own = shader.own;
         boolean depthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
         boolean cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
         boolean blend = GL11.glIsEnabled(GL11.GL_BLEND);
-        mc.entityRenderer.enableLightmap(partial);
+        if (!own) {
+            mc.entityRenderer.enableLightmap(partial);
+        }
         texture.bind();
         GL11.glEnable(GL11.GL_BLEND);
         OpenGlHelper.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, 1, 0);
@@ -235,64 +238,22 @@ public final class OceanRenderer {
                 // a textura se repete a cada bloco: a coordenada vai pequena (precisão do float longe da origem)
                 double tu = (c.cx & 63) * 16.0, tv = (c.cz & 63) * 16.0;
                 tess.setTranslation(ox - camX, rest - camY, oz - camZ);
-                float vxOff = (float) (camX - ox), vyOff = (float) (camY - rest), vzOff = (float) (camZ - oz);
                 for (int k = starts[i]; k < starts[i + 1]; k += OceanMesher.FLOATS) {
-                    float px = d[k], py = d[k + 1], pz = d[k + 2];
-                    float nx = d[k + 3], ny = d[k + 4], nz = d[k + 5];
-                    float foam = foamOn ? d[k + 6] : 0;
-                    float u = d[k + 7], v = d[k + 8];
-                    int col = Math.min(15, Math.max(0, (int) u)) + 16 * Math.min(15, Math.max(0, (int) v));
-                    int rgb = c.color[col];
-                    float r = (rgb >> 16 & 255) / 255f, g = (rgb >> 8 & 255) / 255f, b = (rgb & 255) / 255f;
-                    float a = alpha;
-                    if (shade) {
-                        // vetor para a câmera
-                        float vx = vxOff - px, vy = vyOff - py, vz = vzOff - pz;
-                        float il = (float) (1 / Math.sqrt(vx * vx + vy * vy + vz * vz + 1e-6));
-                        vx *= il;
-                        vy *= il;
-                        vz *= il;
-                        float ndv = Math.abs(nx * vx + ny * vy + nz * vz);
-                        float ndl = Math.max(0, nx * sx + ny * sy + nz * sz);
-                        float m = 1 - ndv, m2 = m * m;
-                        float fres = 0.02f + 0.98f * m2 * m2 * m;
-                        float diffuse = 0.62f + 0.38f * ndl * sun;
-                        float keep = 1 - 0.55f * fres;
-                        r = r * diffuse * keep + skyR * 0.55f * fres;
-                        g = g * diffuse * keep + skyG * 0.55f * fres;
-                        b = b * diffuse * keep + skyB * 0.55f * fres;
-                        a = a + (1 - a) * 0.6f * fres;
-                        if (spec && sun > 0) {
-                            float hx = sx + vx, hy = sy + vy, hz = sz + vz;
-                            float hl = (float) (1 / Math.sqrt(hx * hx + hy * hy + hz * hz + 1e-6));
-                            float ndh = Math.max(0, (nx * hx + ny * hy + nz * hz) * hl);
-                            float p = ndh * ndh;
-                            p *= p;
-                            p *= p;
-                            p *= p;
-                            p *= p; // ndh^32
-                            float sp = p * p * sun * 0.9f; // ndh^64
-                            r += sp;
-                            g += sp;
-                            b += sp * 0.95f;
-                            a = Math.min(1, a + sp);
-                        }
+                    int rgba = Float.floatToRawIntBits(d[k + 9]);
+                    tess.setColorRGBA(rgba >>> 24, rgba >> 16 & 255, rgba >> 8 & 255, rgba & 255);
+                    if (!own) {
+                        int col = Math.min(15, Math.max(0, (int) d[k + 7]))
+                            + 16 * Math.min(15, Math.max(0, (int) d[k + 8]));
+                        tess.setBrightness(c.light[col]);
                     }
-                    if (foam > 0) {
-                        float f = foam * 0.85f;
-                        r += (1 - r) * f;
-                        g += (1 - g) * f;
-                        b += (1 - b) * f;
-                        a += (1 - a) * foam * 0.5f;
-                    }
-                    tess.setColorRGBA_F(Math.min(1, r), Math.min(1, g), Math.min(1, b), Math.min(1, a));
-                    tess.setBrightness(c.light[col]);
-                    tess.setNormal(nx, ny, nz);
-                    // a textura acompanha a posição de repouso das partículas da superfície, em coordenadas do mundo
-                    tess.addVertexWithUV(px, py, pz, tu + u, tv + v);
+                    tess.setNormal(d[k + 3], d[k + 4], d[k + 5]);
+                    // a textura acompanha a posição de repouso das partículas da superfície
+                    tess.addVertexWithUV(d[k], d[k + 1], d[k + 2], tu + d[k + 7], tv + d[k + 8]);
                 }
             }
+            long d0 = System.nanoTime();
             tess.draw();
+            lastGlNanos = System.nanoTime() - d0;
         } finally {
             tess.setTranslation(0, 0, 0);
             GL11.glDepthMask(depthMask);
@@ -302,7 +263,9 @@ public final class OceanRenderer {
             if (!blend) {
                 GL11.glDisable(GL11.GL_BLEND);
             }
-            mc.entityRenderer.disableLightmap(partial);
+            if (!own) {
+                mc.entityRenderer.disableLightmap(partial);
+            }
             mc.getTextureManager()
                 .bindTexture(TextureMap.locationBlocksTexture);
         }

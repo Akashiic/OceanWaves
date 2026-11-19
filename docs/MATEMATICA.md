@@ -198,8 +198,26 @@ O fator de fundo limita a altura pela profundidade d (critério de quebra de McC
 u = γd/Hs, f(u) = 1 − (1 − u)² até 1 (suave). A = costa × fundo.
 
 O gradiente de A entra nas derivadas (∂(Aη)/∂x₀ = A ∂η/∂x₀ + η ∂A/∂x₀, e o mesmo para **D**), então normal,
-jacobiano e a inversa continuam certos na faixa da costa. Com |**D**| ≤ ΣQa e |∇A| ≤ 1/largura, a constante de
-Lipschitz efetiva sobe no máximo ΣQa/largura (0,1 a 0,3 nos estados prontos com largura 10): fica abaixo de 1.
+jacobiano e a inversa continuam certos na faixa da costa.
+
+**A costa também não dobra a superfície.** Com M = Σ Qᵢaᵢ (o maior deslocamento possível),
+
+$$\|\nabla(A\mathbf D)\| \le A\,\|\nabla\mathbf D\| + |\mathbf D|\,|\nabla A| \le A L + M\,|\nabla A|,$$
+
+e basta |∇A| < (1 − L·A)/M. Uma faixa de costa estreita, uma quina ou um degrau de profundidade nos blocos podem
+violar isso (o fator de fundo muda de uma coluna para a outra). Um limite uniforme |∇A| ≤ (1 − L)/M seria seguro mas
+pessimista demais: num mar de tempestade (L = 0,77, M = 5,7 m) a onda levaria 50 blocos para crescer. A condição
+certa depende do valor: é folgada onde A é pequeno (rente à costa) e aperta só em mar aberto. Com a troca de variável
+
+$$B = -\frac{\ln(1 - L A)}{L}, \qquad \frac{dB}{dA} = \frac{1}{1 - L A},$$
+
+ela vira |∇B| < 1/M, **uniforme**. `ShoreField` transforma A em B, impõe |∇B| ≤ 1/(1,5·M) com um envelope de cone (o
+maior campo abaixo de B com essa constante de Lipschitz, por duas passadas de chanfro; só abaixa valores, nunca cria
+onda), e volta a A. Resultado: ‖∇(A**D**)‖ ≤ AL + (1 − AL)/1,5 < 1 em qualquer costa, com a superfície alterada só onde
+a condição falhava. `ShoreFieldTest.shoreNeverFoldsTheSurface` (tempestade, crista 1, faixa de 3 blocos, ilhas de um
+bloco a cada ~10 e degraus de profundidade de 25 para 1) confere A·L + M·|∇A| < 1 e J > 0 em 140 mil pontos;
+`clampKeepsOpenSeaOpen` confere que numa costa reta a onda volta a 90% em menos de 60 blocos e a 100% longe dela. No
+mapa de ilhas a atenuação média cai para 0,34 (as ilhas abrigam o mar), o preço da garantia.
 
 > Aproximação assumida: a fase das componentes não muda com a profundidade (sem refração nem empinamento por
 > diminuição da celeridade). Exigiria um campo de fases por traçado de raios, não determinístico de graça. Fica
@@ -245,6 +263,11 @@ componente de comprimento λ é smoothstep((λ/s − 2,5)/2,5): some com menos d
   (`neighboursOfDifferentResolutionShareTheirEdge`, 10⁻³ m): **sem fresta**.
 * Cada chunk usa a maior potência de 2 menor ou igual ao s do seu ponto mais próximo da câmera: o que sobra do
   espectro sempre tem 2,5 amostras por comprimento de onda.
+* **Junções em T.** O peso igual não basta: na aresta entre um chunk de espaçamento 1 e um de 4, os vértices do meio
+  da aresta fina saem da superfície exata e a aresta grossa é a reta entre os cantos dela. Visto no jogo como uma
+  linha escura fina no mar de tempestade (fresta de até 7,7 cm medida). O mesher põe esses vértices na reta da
+  vizinha grossa (`OceanMesher.stitch`): `stitchingClosesTJunctions` mede fresta < 10⁻⁴ m (zero na prática) e a
+  linha sumiu das capturas.
 * Como o peso varia suavemente com a distância, mover a câmera não faz a superfície estalar entre níveis
   ("geomorphing" no espaço das frequências).
 * Componentes de peso zero num chunk param o laço (estão ordenadas por λ): longe, menos componentes = mais barato.

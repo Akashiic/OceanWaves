@@ -61,4 +61,50 @@ class OceanMesherTest {
         assertTrue(OceanMesher.spacingFor(lod, 20, 0, 1) >= 4);
         assertEquals(16, OceanMesher.spacingFor(lod, 200, 0, 1));
     }
+
+    /**
+     * Junção em T: um chunk de espaçamento 1 ao lado de um de espaçamento 4. Sem costura, os vértices do meio da
+     * aresta fina saem da superfície exata e os da grossa da reta entre os cantos dela: abre fresta. Com a costura,
+     * todo vértice da aresta fina fica na reta da grossa.
+     */
+    @Test
+    void stitchingClosesTJunctions() {
+        WaveSet storm = Synthesis.build(SeaPresets.get("tempestade"));
+        boolean[] open = new boolean[256];
+        Arrays.fill(open, true);
+        OceanMesher fine = new OceanMesher(storm), coarse = new OceanMesher(storm);
+        FloatBuffer a = new FloatBuffer(), b = new FloatBuffer();
+        double t = 321;
+        // fino em x de 0 a 16, grosso de 16 a 32
+        fine.mesh(0, 0, 1, new double[] { 1, 4, 1, 1 }, open, t, null, null, a);
+        coarse.mesh(1, 0, 4, new double[] { 1, 1, 4, 4 }, open, t, null, null, b);
+        // a aresta grossa x = 16: os vértices de oeste dos quads grossos (u = 0), com z de repouso v
+        java.util.Map<Float, float[]> coarseEdge = new java.util.HashMap<>();
+        for (int k = 0; k < b.size; k += OceanMesher.FLOATS) {
+            if (b.data[k + 7] == 0) {
+                coarseEdge.put(b.data[k + 8], new float[] { b.data[k] + 16, b.data[k + 1], b.data[k + 2] });
+            }
+        }
+        double worst = 0;
+        int checked = 0;
+        for (int k = 0; k < a.size; k += OceanMesher.FLOATS) {
+            if (a.data[k + 7] != 16) {
+                continue;
+            }
+            float v = a.data[k + 8];
+            float v0 = (float) (Math.floor(v / 4) * 4), v1 = v0 + 4;
+            float[] p0 = coarseEdge.get(v0), p1 = coarseEdge.get(Math.min(16f, v1));
+            if (p0 == null || p1 == null) {
+                continue;
+            }
+            float w = (v - v0) / 4;
+            double ex = a.data[k] - (p0[0] + (p1[0] - p0[0]) * w);
+            double ey = a.data[k + 1] - (p0[1] + (p1[1] - p0[1]) * w);
+            double ez = a.data[k + 2] - (p0[2] + (p1[2] - p0[2]) * w);
+            worst = Math.max(worst, Math.sqrt(ex * ex + ey * ey + ez * ez));
+            checked++;
+        }
+        assertTrue(checked > 20);
+        assertTrue(worst < 1e-4, "fresta de " + worst + " m");
+    }
 }

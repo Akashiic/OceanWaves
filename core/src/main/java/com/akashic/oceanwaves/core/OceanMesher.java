@@ -10,12 +10,24 @@ package com.akashic.oceanwaves.core;
  * borda do mar é exata (a face de cima da água vanilla some só nas colunas que o mod cobre) em qualquer distância.
  *
  * <p>Cada vértice tem {@link #FLOATS} floats: posição relativa à origem do chunk (x, y acima do nível de repouso,
- * z), normal (x, y, z), espuma, e a posição de repouso relativa à origem (u, v), para a textura acompanhar as
- * partículas da superfície.
+ * z), normal (x, y, z), espuma, a posição de repouso relativa à origem (u, v), para a textura acompanhar as
+ * partículas da superfície, e a cor ({@link Shade}) como os bits de um float (−1, branco opaco, sem sombreador).
  */
 public final class OceanMesher {
 
-    public static final int FLOATS = 9;
+    public static final int FLOATS = 10;
+
+    /**
+     * A cor de um vértice (RGBA empacotado, 0xRRGGBBAA), calculada uma vez por vértice da grade em vez de uma vez por
+     * canto de quad (3,5 vezes menos contas com células de 1 bloco). Posição relativa à origem do chunk.
+     */
+    public interface Shade {
+
+        int shade(int column, float px, float py, float pz, float nx, float ny, float nz, float foam);
+    }
+
+    private int[] colors = new int[0];
+    private Shade shader;
     public static final int CHUNK = 16;
 
     private final GridEvaluator grid;
@@ -45,6 +57,21 @@ public final class OceanMesher {
      */
     public int mesh(int chunkX, int chunkZ, double spacing, boolean[] open, double t, SpectralLod lod,
         Attenuation att, FloatBuffer sink) {
+        return mesh(chunkX, chunkZ, spacing, null, open, t, lod, att, sink);
+    }
+
+    /**
+     * @param neighbours o espaçamento dos quatro vizinhos (oeste −x, leste +x, norte −z, sul +z), ou null. Numa
+     *                   aresta com vizinho mais grosso, os vértices que o vizinho não tem são postos na reta entre os
+     *                   que ele tem: a junção em T fica exata, sem fresta.
+     */
+    public int mesh(int chunkX, int chunkZ, double spacing, double[] neighbours, boolean[] open, double t,
+        SpectralLod lod, Attenuation att, FloatBuffer sink) {
+        return mesh(chunkX, chunkZ, spacing, neighbours, open, t, lod, att, null, sink);
+    }
+
+    public int mesh(int chunkX, int chunkZ, double spacing, double[] neighbours, boolean[] open, double t,
+        SpectralLod lod, Attenuation att, Shade shade, FloatBuffer sink) {
         int count = 0;
         for (boolean b : open) {
             if (b) {
@@ -57,6 +84,26 @@ public final class OceanMesher {
         int cells = (int) Math.round(CHUNK / spacing);
         int n = cells + 1;
         grid.evaluateFast(chunkX * (double) CHUNK, chunkZ * (double) CHUNK, spacing, n, t, lod, att, out);
+        if (neighbours != null) {
+            stitch(n, spacing, neighbours[0], 0, n);
+            stitch(n, spacing, neighbours[1], n - 1, n);
+            stitch(n, spacing, neighbours[2], 0, 1);
+            stitch(n, spacing, neighbours[3], (n - 1) * n, 1);
+        }
+        shader = shade;
+        if (shade != null) {
+            if (colors.length < n * n) {
+                colors = new int[n * n];
+            }
+            for (int j = 0; j < n; j++) {
+                int cz = Math.min(CHUNK - 1, (int) (j * spacing));
+                for (int i = 0; i < n; i++) {
+                    int q = j * n + i, cx = Math.min(CHUNK - 1, (int) (i * spacing));
+                    colors[q] = shade
+                        .shade(cz * CHUNK + cx, out.x[q], out.y[q], out.z[q], out.nx[q], out.ny[q], out.nz[q], out.foam[q]);
+                }
+            }
+        }
         int quads = 0;
         float s = (float) spacing;
         if (spacing <= 1) {
@@ -120,6 +167,32 @@ public final class OceanMesher {
         return quads;
     }
 
+    /** Os vértices da aresta (início {@code first}, passo {@code step}) que um vizinho de espaçamento maior não tem. */
+    private void stitch(int n, double spacing, double neighbour, int first, int step) {
+        int r = (int) Math.round(neighbour / spacing);
+        if (r <= 1) {
+            return;
+        }
+        for (int k = 0; k < n; k++) {
+            int m = k % r;
+            if (m == 0) {
+                continue;
+            }
+            int a = first + (k - m) * step, b = first + (k - m + r) * step, q = first + k * step;
+            float w = (float) m / r, u = 1 - w;
+            out.x[q] = u * out.x[a] + w * out.x[b];
+            out.y[q] = u * out.y[a] + w * out.y[b];
+            out.z[q] = u * out.z[a] + w * out.z[b];
+            float nx = u * out.nx[a] + w * out.nx[b], ny = u * out.ny[a] + w * out.ny[b],
+                nz = u * out.nz[a] + w * out.nz[b];
+            float il = (float) (1 / Math.sqrt(nx * nx + ny * ny + nz * nz));
+            out.nx[q] = nx * il;
+            out.ny[q] = ny * il;
+            out.nz[q] = nz * il;
+            out.foam[q] = u * out.foam[a] + w * out.foam[b];
+        }
+    }
+
     private void vertex(FloatBuffer b, int q, float u, float v) {
         float[] d = b.data;
         int k = b.size;
@@ -132,7 +205,18 @@ public final class OceanMesher {
         d[k + 6] = out.foam[q];
         d[k + 7] = u;
         d[k + 8] = v;
+        d[k + 9] = Float.intBitsToFloat(shader == null ? -1 : colors[q]);
         b.size = k + FLOATS;
+    }
+
+    private static int mix(int c00, int c10, int c01, int c11, float w00, float w10, float w01, float w11) {
+        int out = 0;
+        for (int shift = 24; shift >= 0; shift -= 8) {
+            float v = w00 * (c00 >>> shift & 255) + w10 * (c10 >>> shift & 255) + w01 * (c01 >>> shift & 255)
+                + w11 * (c11 >>> shift & 255);
+            out |= Math.min(255, Math.round(v)) << shift;
+        }
+        return out;
     }
 
     /** Um ponto dentro da célula q (fração fu, fv), por interpolação bilinear dos quatro vértices. */
@@ -154,6 +238,8 @@ public final class OceanMesher {
         d[k + 6] = w00 * out.foam[q] + w10 * out.foam[q10] + w01 * out.foam[q01] + w11 * out.foam[q11];
         d[k + 7] = cu + fu * s;
         d[k + 8] = cv + fv * s;
+        d[k + 9] = Float.intBitsToFloat(shader == null ? -1
+            : mix(colors[q], colors[q10], colors[q01], colors[q11], w00, w10, w01, w11));
         b.size = k + FLOATS;
     }
 }

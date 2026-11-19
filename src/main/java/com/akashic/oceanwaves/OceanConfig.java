@@ -37,10 +37,11 @@ public final class OceanConfig {
     public static boolean render = true;
     public static double minSpacing = 1.0;
     public static double lodFactor = 0.02;
-    public static float alpha = 0.82f;
+    public static float alpha = 0.78f;
     public static boolean shading = true;
     public static boolean foam = true;
     public static boolean specular = true;
+    public static double relief = 2.0;
     public static int rebuildsPerFrame = 6;
 
     private OceanConfig() {}

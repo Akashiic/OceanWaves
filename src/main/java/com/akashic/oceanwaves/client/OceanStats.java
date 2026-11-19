@@ -13,6 +13,10 @@ public final class OceanStats {
         return OceanRenderer.INSTANCE.averageDrawMs();
     }
 
+    public static double glMs() {
+        return OceanRenderer.INSTANCE.averageGlMs();
+    }
+
     public static int chunks() {
         return OceanRenderer.INSTANCE.lastChunks;
     }
