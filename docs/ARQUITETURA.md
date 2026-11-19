@@ -40,10 +40,17 @@ reaproveitados); uma instância por thread de tudo que guarda estado de trabalho
   dimensão ou renasce, e a todos da dimensão quando muda (`MessageSeaState` no canal FML `oceanwaves`).
 * `/ondas` (`/oceanwaves`, `/ow`), operadores: `info`, `estado <nome>`, `vento <m/s> [graus]`, `altura`, `escala`,
   `crista`, `componentes`, `semente`, `aqui` (a superfície, a atenuação, a inclinação, o jacobiano e a velocidade
-  da água no ponto do jogador, com o tempo da consulta), `ligar`, `desligar`. Muda o mar de todos em tempo real.
+  da água no ponto do jogador, com o tempo da consulta), `regiao <spawn|aqui|tudo> [raio]`, `ligar`, `desligar`.
+  Muda o mar de todos em tempo real.
+* **Região** (`core.SeaRegion`): um círculo (em volta do spawn por padrão, 384 blocos) ou o mundo todo. Uma coluna
+  fora dela não é "mar aberto" para nada: nem para o mixin da face vanilla, nem para o cache do cliente, nem para a
+  `shore` da API. Por isso a borda entra no `ShoreField` exatamente como uma costa (a distância até ela e o limite de
+  gradiente), e vale a mesma garantia de não dobrar. A região vai no fim da `MessageSeaState` (versão 2; um cliente
+  da versão 1 ignora os bytes a mais, um servidor da 1 não manda e o cliente fica com a da configuração).
 * `api.OceanWaves`: para mods e plugins Bukkit no Crucible (o jar leva o núcleo; plugin compila `compileOnly`). Só
   tipos do Java e do núcleo nas assinaturas. `state`, `waves`, `setState`, `time` (o tempo total do mundo em
-  segundos), `restLevel`, `shore` (a atenuação a partir dos blocos reais), `surfaceY`.
+  segundos), `restLevel`, `shore` (a atenuação a partir dos blocos reais e da região), `shoreMargin` (a folga que
+  a atenuação de um retângulo pede em volta dele), `region`, `surfaceY`.
 
 ### 3. Cliente (`client/`, `mixin/`)
 
@@ -85,20 +92,26 @@ opcional para quando não há shaderpack. Ver [adr/ADR-0003](adr/ADR-0003-desenh
 
 ## Navios (Expeditions)
 
-O Expeditions já integra o empuxo coluna a coluna (`FloatingBody`) contra `WaveField.height(x, z, t)`. A troca:
+O Expeditions integra o empuxo coluna a coluna (`FloatingBody`) contra uma superfície `SeaSurface.height(x, z, t)`.
+Feito no branch `claude/minecraft-ocean-physics-mod-n82b79` do Expeditions (`plugin/OceanWavesSea`, a única classe
+dele que toca no OceanWaves), assim:
 
-1. `WaveField` vira uma interface (ou um adaptador) com a altura dada por um `HeightPatch` do OceanWaves, atualizado
-   uma vez por tick sobre o retângulo do casco (com as componentes de λ ≥ 2 m: `waves.prefixSet(waves.prefix(2))`),
-   e a atenuação `OceanWaves.shore(...)` do mesmo retângulo com folga.
+1. Dois `HeightPatch` sobre o retângulo do casco, no começo e no fim de cada intervalo de `MOTION_TICKS`; os
+   subpassos da física interpolam no tempo entre eles. Só as componentes de λ ≥ 4 m
+   (`waves.prefixSet(waves.prefix(4))`): as mais curtas se cancelam somadas sobre um casco de dezenas de metros. A
+   atenuação é `OceanWaves.shore(...)` do retângulo com 16 blocos de folga mais `shoreMargin`, relida quando o navio
+   sai dela, o mar muda ou a cada minuto.
 2. **O tempo do mar passa a ser `OceanWaves.time(dimensão)`** (o tempo total do mundo), não o contador do plugin:
    é o que os clientes usam.
 3. **A pose vai adiantada.** O Kunftig faz o navio deslizar até a pose em N ticks (`MOTION_TICKS`): a pose
    calculada para o instante t só chega lá em t + N/20 no cliente, e o navio fica atrás da onda. Calcular a física
    até t + N/20 e mandar essa pose com o deslizamento de N ticks põe navio e onda juntos. O atraso de meia latência
    da rede vale para os dois (o relógio do cliente também vem do servidor), então se cancela.
-4. O amortecimento pode usar a velocidade da água (`WaveSample.vx/vy/vz`) em vez da do navio sozinha.
+4. O vento da banda é o vento do mar (`SeaState.windSpeed/windDirection`), e `/exp vento` muda o do OceanWaves.
+5. Só o mundo principal (dimensão 0) por enquanto, e só com a linha d'água no nível do mar do mod; fora disso o
+   plugin usa o mar próprio dele. Sem o mod no servidor, nada muda no Expeditions.
 
-Isso é trabalho no repositório do Expeditions (outro PR), não aqui. **[a fazer]**
+**[a fazer]** O amortecimento pode usar a velocidade da água (`WaveSample.vx/vy/vz`) em vez da do navio sozinha.
 
 ## Desempenho medido
 

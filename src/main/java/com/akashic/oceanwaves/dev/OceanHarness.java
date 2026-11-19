@@ -96,6 +96,25 @@ public final class OceanHarness {
                 h.cases.add(c);
             }
         }
+        // casos próprios (multijogador): "caso nome estado|manter x y z guinada inclinação hora", seguidos das linhas
+        // "/comando" mandadas no chat no começo dele (uma a cada 10 ticks)
+        Object[] own = null;
+        for (String line : (selection == null ? "" : selection).split("\\r?\\n")) {
+            String l = line.trim();
+            if (l.startsWith("caso ")) {
+                String[] f = l.substring(5)
+                    .trim()
+                    .split("\\s+");
+                own = new Object[] { f[0], f[1], Double.parseDouble(f[2]), Double.parseDouble(f[3]),
+                    Double.parseDouble(f[4]), Float.parseFloat(f[5]), Float.parseFloat(f[6]), Long.parseLong(f[7]),
+                    new ArrayList<String>() };
+                h.cases.add(own);
+            } else if (l.startsWith("/") && own != null) {
+                @SuppressWarnings("unchecked")
+                List<String> commands = (List<String>) own[8];
+                commands.add(l);
+            }
+        }
         FMLCommonHandler.instance()
             .bus()
             .register(h);
@@ -250,6 +269,14 @@ public final class OceanHarness {
         Object[] c = cases.get(index);
         remoteHold(mc, c);
         ticks++;
+        if (c.length > 8 && ticks % 10 == 0) {
+            @SuppressWarnings("unchecked")
+            List<String> commands = (List<String>) c[8];
+            int k = ticks / 10 - 1;
+            if (k < commands.size()) {
+                mc.thePlayer.sendChatMessage(commands.get(k));
+            }
+        }
         if (ticks == WARMUP / 2) {
             report(clockLine(String.valueOf(c[0])));
         }
@@ -295,7 +322,9 @@ public final class OceanHarness {
     }
 
     private void remoteBegin(Minecraft mc, Object[] c) {
-        mc.thePlayer.sendChatMessage(c[1] == null ? "/ondas desligar" : "/ondas estado " + c[1]);
+        if (!"manter".equals(c[1])) {
+            mc.thePlayer.sendChatMessage(c[1] == null ? "/ondas desligar" : "/ondas estado " + c[1]);
+        }
         mc.thePlayer.sendChatMessage("/time set " + c[7]);
         mc.thePlayer.sendChatMessage(
             String.format(

@@ -44,7 +44,8 @@ O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUI
 | Shaderpacks (BSL, Complementary) | **integrado e visto**: o mar passa pelo programa de água do pack (reflexos, refração, sombra) ([ADR-0004](docs/adr/ADR-0004-shaderpacks.md)) |
 | Mirai, modo de compatibilidade (DragonAPI sem Angelica) | **a verificar** |
 | Desempenho numa placa de vídeo | **a verificar**; sem GPU, 8 chunks: ~8 a 10 ms por quadro no ambiente de desenvolvimento, ~6 a 20 ms no pack real |
-| Navios do Expeditions nas ondas | API pronta; a troca no Expeditions é outro PR ([como](docs/ARQUITETURA.md#navios-expeditions)) |
+| Região: ondas só em volta do spawn (padrão, raio 384) ou de um ponto, ou no mundo todo | feito; a borda da região se comporta como costa (as ondas morrem nela, sem degrau); ligada no servidor do Forbidden (raio 384 em volta do spawn, mandada ao cliente); a borda vista no jogo, **a verificar** |
+| Navios do Expeditions nas ondas | feito no Expeditions (branch `claude/minecraft-ocean-physics-mod-n82b79`, `OceanWavesSea`); **visto**: o galeão flutuando no mar do OceanWaves no servidor do Forbidden ([como](docs/ARQUITETURA.md#navios-expeditions)) |
 | Barcos vanilla, entidades, névoa submersa, esteiras, camada GPU | próximas fases |
 
 ## Usar
@@ -58,8 +59,15 @@ O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUI
 /ondas vento <m/s> [graus]      (0 = leste, 90 = sul)
 /ondas altura <x>   /ondas escala <x>   /ondas crista <0-1>   /ondas componentes <n>
 /ondas aqui                     (a água no seu ponto: altura, atenuação, inclinação, velocidade)
+/ondas regiao <spawn|aqui|tudo> [raio]   (onde há ondas; padrão: 384 blocos em volta do spawn)
 /ondas ligar | desligar
 ```
+
+**Região.** Por padrão as ondas só existem num círculo de 384 blocos em volta do spawn do mundo (`regiao` na
+configuração: `modo = spawn | ponto | tudo`, `raio`, `x`, `z`). Fora dele a água é a vanilla, parada. A borda é
+tratada como costa: a atenuação das ondas cai até zero nela pelo mesmo limite de gradiente da costa, então a
+superfície nunca dobra nem dá degrau. O servidor manda a região aos clientes junto com o mar; `/ondas regiao` a muda
+para todos e grava na configuração.
 
 F3 mostra o estado, o custo por quadro e o relógio. Chaves: `-Doceanwaves.disable=true` (mod inerte no cliente),
 `-Doceanwaves.topFace.disable=true` (a face vanilla volta, para depurar).
