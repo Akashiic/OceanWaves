@@ -44,6 +44,7 @@ public final class OceanWavesMod {
         FMLCommonHandler.instance()
             .bus()
             .register(ServerSea.INSTANCE);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(ServerSea.INSTANCE);
         proxy.preInit(event);
     }
 
@@ -56,6 +57,11 @@ public final class OceanWavesMod {
     public void serverStarting(FMLServerStartingEvent event) {
         ServerSea.INSTANCE.start();
         event.registerServerCommand(new OceanCommand());
+    }
+
+    @Mod.EventHandler
+    public void serverStarted(cpw.mods.fml.common.event.FMLServerStartedEvent event) {
+        ServerSea.INSTANCE.started();
     }
 
     @Mod.EventHandler

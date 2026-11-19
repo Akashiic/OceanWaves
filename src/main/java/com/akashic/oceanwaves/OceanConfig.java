@@ -27,10 +27,18 @@ public final class OceanConfig {
     public static int components = 64;
     public static long seed = 0x0CEA17L;
     public static int seaLevel = 63;
+    /**
+     * Mundos com ondas (vale pelo servidor): o nome da pasta do mundo (o do Multiverse, ex.: {@code Akashic/Spawn}) ou
+     * o número da dimensão.
+     */
+    public static java.util.List<String> worlds = new java.util.ArrayList<>();
+    /** Nenhum dos {@link #worlds} existe neste servidor (jogo sozinho, outro servidor): ondas no mundo principal. */
+    public static boolean mainWorldFallback = true;
+    /** As dimensões da configuração para um cliente num servidor sem o mod (só números; sem nomes, a 0). */
     public static Set<Integer> dimensions = new HashSet<>();
 
     // região
-    public static String regionMode = "spawn";
+    public static String regionMode = "tudo";
     public static double regionRadius = 384;
     public static double regionX = 0;
     public static double regionZ = 0;
@@ -94,10 +102,37 @@ public final class OceanConfig {
         seed = Long.decode(c.getString("semente", m, "0x0CEA17", "Semente das fases e direções"));
         seaLevel = c.get(m, "nivel", seaLevel, "Nível do mar (o bloco de água mais alto é nivel - 1)")
             .getInt();
+        c.getCategory(m)
+            .remove("dimensoes");
+        worlds.clear();
         dimensions.clear();
-        for (int d : c.get(m, "dimensoes", new int[] { 0 }, "Dimensões com ondas")
-            .getIntList()) {
-            dimensions.add(d);
+        for (String w : c.get(
+            m,
+            "mundos",
+            new String[] { "Akashic/Spawn" },
+            "Mundos com ondas: o nome da pasta do mundo (o do Multiverse, ex.: Akashic/Spawn) ou o número da dimensão. "
+                + "Nos outros mundos a água é a vanilla.")
+            .getStringList()) {
+            String t = w.trim();
+            if (t.isEmpty()) {
+                continue;
+            }
+            worlds.add(t);
+            try {
+                dimensions.add(Integer.parseInt(t));
+            } catch (NumberFormatException e) {
+                // um nome: só o servidor sabe a dimensão dele
+            }
+        }
+        mainWorldFallback = c.get(
+            m,
+            "principalSeNenhum",
+            mainWorldFallback,
+            "Se nenhum desses mundos existir no servidor (um jogo sozinho, outro servidor), ondas no mundo principal "
+                + "(dimensão 0)")
+            .getBoolean();
+        if (dimensions.isEmpty() && mainWorldFallback) {
+            dimensions.add(0);
         }
         String g = "regiao";
         c.setCategoryComment(g, "Onde há ondas. Fora da região a água continua a vanilla (vale pelo servidor).");
@@ -105,7 +140,7 @@ public final class OceanConfig {
             "modo",
             g,
             regionMode,
-            "spawn: em volta do spawn do mundo; ponto: em volta de (x, z); tudo: o mundo todo");
+            "tudo: o mundo inteiro; spawn: um círculo em volta do spawn do mundo; ponto: um círculo em volta de (x, z)");
         regionRadius = c.get(g, "raio", regionRadius, "Raio da região em blocos (spawn e ponto)")
             .getDouble();
         regionX = c.get(g, "x", regionX, "Centro da região no modo ponto")
@@ -182,8 +217,10 @@ public final class OceanConfig {
                 return com.akashic.oceanwaves.core.SeaRegion.EVERYWHERE;
             case "ponto":
                 return com.akashic.oceanwaves.core.SeaRegion.circle(regionX, regionZ, r);
-            default:
+            case "spawn":
                 return com.akashic.oceanwaves.core.SeaRegion.circle(spawnX + 0.5, spawnZ + 0.5, r);
+            default:
+                return com.akashic.oceanwaves.core.SeaRegion.EVERYWHERE;
         }
     }
 

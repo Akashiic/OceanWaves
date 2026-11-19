@@ -24,9 +24,20 @@ import com.akashic.oceanwaves.world.OceanColumns;
  */
 public final class OceanWaves {
 
-    public static final int API_VERSION = 1;
+    /** 2: {@link #dimensionOf} (os mundos com ondas escolhidos pelo nome, como os do Multiverse). */
+    public static final int API_VERSION = 2;
 
     private OceanWaves() {}
+
+    /**
+     * A dimensão do mundo com esse nome, ou null se não há mundo carregado com ele. O nome é o do Bukkit no Crucible
+     * ({@code World#getName()}): a pasta do mundo ({@code Akashic/Spawn}), o {@code level-name} do mundo principal ou
+     * {@code DIM<n>}. Os mundos de plugin ganham o número só quando carregam (e podem ganhar outro a cada início): um
+     * plugin pergunta por nome, não guarda o número.
+     */
+    public static Integer dimensionOf(String worldName) {
+        return ServerSea.dimensionOf(worldName);
+    }
 
     /** O estado do mar da dimensão, ou null se ela não tem ondas. */
     public static SeaState state(int dimension) {

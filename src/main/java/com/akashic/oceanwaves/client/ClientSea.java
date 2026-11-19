@@ -110,8 +110,12 @@ public final class ClientSea {
         if (w != world) {
             world = w;
             CLOCK.reset();
-            fromServer = false;
             dimension = Integer.MIN_VALUE;
+            // Com o mod no servidor, o mar de cada mundo vem dele na troca de mundo; a mensagem vem pela thread da rede
+            // e pode chegar antes do pacote de troca de mundo (já aplicada aqui). Só sem conexão volta a configuração.
+            if (w == null) {
+                fromServer = false;
+            }
         }
         MessageSeaState m = pending;
         if (m != null) {

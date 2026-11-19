@@ -73,7 +73,9 @@ public final class OceanCommand extends CommandBase {
             && !sub.equals("info")
             && !sub.equals("estado")
             && !sub.equals("regiao")) {
-            say(sender, "Sem ondas nesta dimensão. Use /ondas ligar.");
+            say(
+                sender,
+                "Sem ondas neste mundo. Use /ondas ligar (até o servidor reiniciar; para sempre: mundos na configuração).");
             return;
         }
         switch (sub) {
@@ -184,8 +186,9 @@ public final class OceanCommand extends CommandBase {
 
     private static void info(ICommandSender sender, int dim) {
         SeaState s = OceanWaves.state(dim);
+        say(sender, "Ondas em: " + com.akashic.oceanwaves.server.ServerSea.INSTANCE.describe() + ".");
         if (s == null) {
-            say(sender, "Sem ondas nesta dimensão.");
+            say(sender, "Sem ondas neste mundo.");
             return;
         }
         WaveSet w = OceanWaves.waves(dim);
