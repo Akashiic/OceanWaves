@@ -56,7 +56,11 @@ reaproveitados); uma instância por thread de tudo que guarda estado de trabalho
   tipos do Java e do núcleo nas assinaturas. `state`, `waves`, `setState`, `time` (o tempo total do mundo em
   segundos), `restLevel`, `shore` (a atenuação a partir dos blocos reais e da região), `shoreMargin` (a folga que
   a atenuação de um retângulo pede em volta dele), `region`, `surfaceY`, `dimensionOf` (API 2: a dimensão de um
-  mundo pelo nome do Bukkit, para um plugin achar a do mundo onde está).
+  mundo pelo nome do Bukkit, para um plugin achar a do mundo onde está). O `ShoreField` que `shore` devolve é
+  `uniform()` quando não há costa na janela (todos os cantos valem 1: o caminho barato, sem a atenuação ponto a ponto):
+  vale **dentro da janela**. Uma consulta do `OceanField` a um ponto **fora** dela (o contrato de `shore` é a janela com
+  a folga de `shoreMargin`) devolve a onda cheia do mar aberto, não a água parada que o `at` (0 fora) sugere, e a amostra
+  grava `attenuation = 0`; o que a aplica é `ShoreFieldTest#theUniformPathHoldsInsideTheWindowAndGivesTheFullWaveOutsideIt`.
 
 ### 3. Cliente (`client/`, `mixin/`)
 
@@ -67,7 +71,9 @@ reaproveitados); uma instância por thread de tudo que guarda estado de trabalho
   (`world.OceanColumns.isOpenSea`, a mesma regra do servidor), só com o desenho ligado **e vivo**: se o renderizador
   falhou (`RendererHealth`, volátil, lido nas threads de montagem) a face volta. Ligar/desligar, mudar a região, mudar
   o nível do mar (o servidor o mede depois de o cliente já ter montado chunks) ou falhar remonta os chunks, **uma vez
-  por tick** (`RemountRequest`, no `ClientSea.tick`, nunca dentro do `catch` do desenho).
+  por tick** (`RemountRequest`, no `ClientSea.tick`, nunca dentro do `catch` do desenho). Um pedido feito quando ainda
+  não há `RenderGlobal` (mundo carregado, renderizador do vanilla não montado) espera o primeiro tick em que dá, em vez
+  de se perder; sem mundo, os pedidos são esquecidos (o mundo novo monta com o estado em vigor).
 * `OceanChunks`, `ColumnRing`: por chunk, lido do mundo uma vez: colunas de mar, profundidade, cor da água do bioma
   (`Blocks.water.colorMultiplier`, que passa pelos eventos do Forge: o Neo States muda a cor por ali), luz, e a
   atenuação da costa (precisa dos vizinhos). Fica sabendo das mudanças como `IWorldAccess` do mundo do cliente. Os
@@ -88,7 +94,10 @@ reaproveitados); uma instância por thread de tudo que guarda estado de trabalho
   grossas (junções em T); a cor de cada vértice da grade pelo `SurfaceShader`; vértices no `Tessellator` com cor, normal
   (só com shaderpack: com a luz na cor ela não é usada) e UV na posição de repouso das partículas (a textura acompanha o
   movimento orbital), sem repetir ao Tessellator a cor e a luz que não mudaram de um vértice ao outro; profundidade
-  escrita, faces dos dois lados. O estado do GL que se devolve (máscara de profundidade, corte, mistura) é lido de
+  escrita, faces dos dois lados. O laço que manda os vértices ao `Tessellator` é o `VertexEmitter` (sobre um
+  `VertexSink`: o `Tessellator` no jogo, um gravador nos testes e no `clientBench`), com o vetor de inícios por chunk em
+  `ChunkSpans` (reaproveitado, só cresce: o laço vai até `count()`, nunca até o comprimento do vetor), a ordenação em
+  `NearestFirst` e o `SpectralLod` reaproveitado em `LodMemo` enquanto a câmera não anda. O estado do GL que se devolve (máscara de profundidade, corte, mistura) é lido de
   vez em quando (`StateMemo`), não todo quadro **[a verificar com o Angelica e o vanilla]**. Falha: `RuntimeException`
   ou `LinkageError` desligam o desenho e a face de cima da água volta; o `Tessellator` aberto é fechado no `finally`.
 * `SurfaceShader`: sem shaderpack, a luz é feita aqui e o mapa de luz fica desligado (difusa, Fresnel de Schlick com o
@@ -156,7 +165,9 @@ chamadas ao `Tessellator`, padrões com shaderpack): medidas antes e depois, for
 [PLANO-DE-TESTES.md](PLANO-DE-TESTES.md#2b-custo-do-caminho-do-renderizador-fora-do-jogo-gradlew-clientbench)
 (`./gradlew clientBench`). Resumo: −0,35 a −0,4 ms por quadro na avaliação em alto-mar; 25 costas refeitas ao chegar um
 chunk saem de 4,6 a 6 ms num quadro para 0,1 ms (mar aberto) ou no máximo 0,4 ms por quadro (junto à costa); 0 byte
-de lixo por quadro nos laços de consulta (eram 17 a 21 KB); 50 a 61% menos chamadas ao `Tessellator`; com shaderpack, a
+de lixo por quadro na consulta de chunks, na ordenação, no vetor de inícios e no laço de envio dos vértices, medidos
+sobre as classes de verdade (eram 17 a 21 KB); o `SpectralLod` (classe imutável do núcleo) é reaproveitado com a câmera
+parada, e com ela andando sobra **um objeto de 80 bytes por passe**; 50 a 61% menos chamadas ao `Tessellator`; com shaderpack, a
 malha cai de ~2,5 para ~1,05 ms e deixa de repetir ~1,2 ms na passagem de sombra. Nenhum FPS medido em jogo.
 
 No jogo (harness, distância 8, GL por software; tabela completa em [PLANO-DE-TESTES.md](PLANO-DE-TESTES.md)): o mar

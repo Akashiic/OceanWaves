@@ -28,9 +28,13 @@ import com.akashic.oceanwaves.core.WaveSet;
  * sentinela (o que recebe agora);</li>
  * <li>B: refazer a costa de um chunk que chegou (os 25 vizinhos marcados): o jeito antigo (todos no mesmo quadro, uma
  * busca com {@code Long} por coluna) e o de agora (orçamento por quadro; janelas de mar aberto sem conta);</li>
- * <li>C: lixo por quadro dos laços de consulta de chunk, ordenação e vetor de inícios;</li>
+ * <li>C: lixo por quadro. C1: consulta de chunks, ordenação e vetor de inícios (o "antes" é uma réplica, o "depois"
+ * chama {@code ColumnRing}, {@code NearestFirst} e {@code ChunkSpans} de verdade); C2: o laço de envio dos vértices
+ * ({@code VertexEmitter} de verdade); C3: o {@code SpectralLod} ({@code LodMemo} de verdade, com a câmera parada e
+ * andando);</li>
  * <li>D: emissão dos vértices num Tessellator emulado (8 ints por vértice, como o vanilla; não é o do Angelica, que
- * custa de 3 a 5 vezes mais por chamada) com e sem as chamadas que o desenho deixou de fazer;</li>
+ * custa de 3 a 5 vezes mais por chamada): o "antes" é uma réplica do laço antigo, o "depois" é o
+ * {@code VertexEmitter} de verdade (o mesmo laço que o {@code OceanRenderer} usa);</li>
  * <li>E: a malha com o espaçamento mínimo do padrão sem e com shaderpack, e a passagem de sombra.</li>
  * </ul>
  */
@@ -312,6 +316,37 @@ public final class ClientPathBench {
                 .getId());
     }
 
+    /** Um {@link VertexSink} que só conta (sem alocar nem guardar). */
+    static final class CountingSink implements VertexSink {
+
+        long vertices, colors, lights, normals, translations;
+
+        @Override
+        public void setTranslation(double x, double y, double z) {
+            translations++;
+        }
+
+        @Override
+        public void setColorRGBA(int r, int g, int b, int a) {
+            colors++;
+        }
+
+        @Override
+        public void setBrightness(int brightness) {
+            lights++;
+        }
+
+        @Override
+        public void setNormal(float x, float y, float z) {
+            normals++;
+        }
+
+        @Override
+        public void addVertexWithUV(double x, double y, double z, double u, double v) {
+            vertices++;
+        }
+    }
+
     private static void c() {
         int radius = 8;
         List<int[]> order = new ArrayList<>();
@@ -340,8 +375,7 @@ public final class ClientPathBench {
         }
         int frames = 20_000;
         double camX = 3.3, camZ = -5.1;
-        int[] startsNew = new int[0];
-        // antes: computeIfAbsent com chave encaixotada e lambda, sort com lambda, new int[] por quadro
+        // antes (réplica): computeIfAbsent com chave encaixotada e lambda, sort com lambda, new int[] por quadro
         long a0 = allocated();
         long t0 = System.nanoTime();
         for (int f = 0; f < frames; f++) {
@@ -361,41 +395,92 @@ public final class ClientPathBench {
         }
         long t1 = System.nanoTime();
         long a1 = allocated();
-        // depois: o anel, inserção sem lambda, vetor reaproveitado
-        for (int f = 0; f < frames; f++) {
-            visibleNew.clear();
-            for (int o = 0; o < spiral.length; o += 2) {
-                OceanChunks.Column col = ring.get(spiral[o], spiral[o + 1]);
-                if (col.cx * 16 + 8 > camX - 80) {
-                    visibleNew.add(col);
+        // depois (o código de verdade, sem Minecraft): o anel, NearestFirst e ChunkSpans
+        int perChunk = 64;
+        ChunkSpans spans = new ChunkSpans();
+        long[] bytes = new long[2];
+        double[] micros = new double[2];
+        for (int pass = 0; pass < 2; pass++) { // a primeira é o aquecimento do JIT
+            long before = allocated();
+            long start = System.nanoTime();
+            for (int f = 0; f < frames; f++) {
+                visibleNew.clear();
+                for (int o = 0; o < spiral.length; o += 2) {
+                    OceanChunks.Column col = ring.get(spiral[o], spiral[o + 1]);
+                    if (col.cx * 16 + 8 > camX - 80) {
+                        visibleNew.add(col);
+                    }
                 }
-            }
-            double fx = camX + f * 0.001;
-            for (int i = 1; i < visibleNew.size(); i++) {
-                OceanChunks.Column col = visibleNew.get(i);
-                double d = d2(col, fx, camZ);
-                int j = i - 1;
-                while (j >= 0 && d2(visibleNew.get(j), fx, camZ) > d) {
-                    visibleNew.set(j + 1, visibleNew.get(j));
-                    j--;
+                NearestFirst.sort(visibleNew, camX + f * 0.001, camZ);
+                spans.reset(visibleNew.size());
+                for (int i = 0; i < visibleNew.size(); i++) {
+                    spans.begin(i, i * perChunk * OceanMesher.FLOATS);
                 }
-                visibleNew.set(j + 1, col);
+                spans.end(visibleNew.size() * perChunk * OceanMesher.FLOATS);
+                sink += spans.count() + visibleNew.get(0).cx;
             }
-            if (startsNew.length < visibleNew.size() + 1) {
-                startsNew = new int[visibleNew.size() + 1];
-            }
-            sink += startsNew.length + visibleNew.get(0).cx;
+            bytes[pass] = (allocated() - before) / frames;
+            micros[pass] = (System.nanoTime() - start) / 1e3 / frames;
         }
-        long t2 = System.nanoTime();
-        long a2 = allocated();
         System.out.printf(
             Locale.ROOT,
-            "C lixo por quadro (%d chunks na espiral): antes %d bytes, %.1f us; depois %d bytes, %.1f us%n",
+            "C1 lixo por quadro da consulta + ordem + vetor de inícios (%d chunks na espiral, %d visíveis): antes (réplica)"
+                + " %d bytes, %.1f us; depois (ColumnRing, NearestFirst e ChunkSpans de verdade) %d bytes, %.1f us%n",
             spiral.length / 2,
+            visibleNew.size(),
             (a1 - a0) / frames,
             (t1 - t0) / 1e3 / frames,
-            (a2 - a1) / frames,
-            (t2 - t1) / 1e3 / frames);
+            bytes[1],
+            micros[1]);
+
+        // o laço de envio de verdade (VertexEmitter) sobre dados já no buffer: nada alocado, com e sem luz própria
+        FloatBuffer data = new FloatBuffer();
+        data.reserve(visibleNew.size() * perChunk * OceanMesher.FLOATS);
+        for (int i = 0; i < visibleNew.size() * perChunk; i++) {
+            for (int q = 0; q < OceanMesher.FLOATS; q++) {
+                data.put(q == 9 ? Float.intBitsToFloat(0x3F000000 | (i / 7 % 5) << 8) : (i * 7 + q) % 16);
+            }
+        }
+        CountingSink counting = new CountingSink();
+        for (boolean own : new boolean[] { true, false }) {
+            long per = 0;
+            for (int pass = 0; pass < 2; pass++) {
+                long before = allocated();
+                for (int f = 0; f < 2_000; f++) {
+                    VertexEmitter.emit(counting, visibleNew, spans, data.data, own, camX + f * 0.001, 70, camZ, 62.9);
+                }
+                per = (allocated() - before) / 2_000;
+            }
+            sink += counting.vertices;
+            System.out.printf(
+                Locale.ROOT,
+                "C2 lixo por quadro do laço de envio de verdade (VertexEmitter, %d vértices, %s): %d bytes%n",
+                visibleNew.size() * perChunk,
+                own ? "luz própria" : "com luz do mapa e normal",
+                per);
+        }
+
+        // o SpectralLod: imutável e do núcleo; reaproveitado só enquanto a câmera não anda (LodMemo)
+        LodMemo still = new LodMemo(), moving = new LodMemo();
+        long[] lod = new long[2];
+        for (int variant = 0; variant < 2; variant++) {
+            LodMemo memo = variant == 0 ? still : moving;
+            for (int pass = 0; pass < 2; pass++) {
+                long before = allocated();
+                for (int f = 0; f < frames; f++) {
+                    SpectralLod l = memo
+                        .get(variant == 0 ? camX : camX + f * 0.001, 70, camZ, 62.9, 1.0, 0.02, 2.5, 5.0);
+                    sink += l.camX;
+                }
+                lod[variant] = (allocated() - before) / frames;
+            }
+        }
+        System.out.printf(
+            Locale.ROOT,
+            "C3 lixo por passe do SpectralLod (LodMemo): câmera parada %d bytes; câmera andando %d bytes (um objeto novo,"
+                + " a classe é imutável no núcleo)%n",
+            lod[0],
+            lod[1]);
     }
 
     private static double d2(OceanChunks.Column c, double x, double z) {
@@ -406,7 +491,7 @@ public final class ClientPathBench {
     // ---------------------------------------------------------------- D
 
     /** O Tessellator vanilla, emulado: 8 ints por vértice; conta as chamadas. */
-    static final class FakeTess {
+    static final class FakeTess implements VertexSink {
 
         int[] raw = new int[1 << 16];
         int idx;
@@ -418,23 +503,34 @@ public final class ClientPathBench {
             idx = 0;
         }
 
-        void setColorRGBA(int r, int g, int b, int a) {
+        @Override
+        public void setTranslation(double x, double y, double z) {
+            xo = x;
+            yo = y;
+            zo = z;
+        }
+
+        @Override
+        public void setColorRGBA(int r, int g, int b, int a) {
             color = a << 24 | b << 16 | g << 8 | r;
             colorCalls++;
         }
 
-        void setBrightness(int b) {
+        @Override
+        public void setBrightness(int b) {
             bright = b;
             brightCalls++;
         }
 
-        void setNormal(float x, float y, float z) {
+        @Override
+        public void setNormal(float x, float y, float z) {
             byte bx = (byte) (int) (x * 127), by = (byte) (int) (y * 127), bz = (byte) (int) (z * 127);
             normal = bx & 255 | (by & 255) << 8 | (bz & 255) << 16;
             normalCalls++;
         }
 
-        void addVertexWithUV(double x, double y, double z, double u, double v) {
+        @Override
+        public void addVertexWithUV(double x, double y, double z, double u, double v) {
             if (idx + 8 > raw.length) {
                 raw = java.util.Arrays.copyOf(raw, raw.length * 2);
             }
@@ -518,6 +614,16 @@ public final class ClientPathBench {
             }
             starts[vis.size()] = buf.size;
             FakeTess tess = new FakeTess();
+            List<OceanChunks.Column> cols = new ArrayList<>();
+            ChunkSpans spans = new ChunkSpans();
+            spans.reset(vis.size());
+            for (int i = 0; i < vis.size(); i++) {
+                OceanChunks.Column col = new OceanChunks.Column(vis.get(i)[0], vis.get(i)[1]);
+                java.util.Arrays.fill(col.light, 15 << 20);
+                cols.add(col);
+                spans.begin(i, starts[i]);
+            }
+            spans.end(starts[vis.size()]);
             double oldMs = Double.MAX_VALUE, newMs = Double.MAX_VALUE;
             long oldCalls = 0, newCalls = 0;
             for (int rep = 0; rep < 12; rep++) {
@@ -531,7 +637,8 @@ public final class ClientPathBench {
                 tess.colorCalls = tess.brightCalls = tess.normalCalls = tess.vertexCalls = 0;
                 t0 = System.nanoTime();
                 for (int q = 0; q < 20; q++) {
-                    emitNew(tess, buf.data, starts, vis, own, light);
+                    tess.start();
+                    VertexEmitter.emit(tess, cols, spans, buf.data, own, camX, camY, camZ, rest);
                 }
                 newMs = Math.min(newMs, (System.nanoTime() - t0) / 1e6 / 20);
                 newCalls = (tess.colorCalls + tess.brightCalls + tess.normalCalls + tess.vertexCalls) / 20;
@@ -549,7 +656,7 @@ public final class ClientPathBench {
         }
     }
 
-    /** O laço de submit de antes: cor, luz (sem own) e normal em todo vértice. */
+    /** O laço de submit de antes (réplica): cor, luz (sem own) e normal em todo vértice. */
     private static void emitOld(FakeTess tess, float[] d, int[] starts, List<int[]> vis, boolean own, int[] light) {
         tess.start();
         for (int i = 0; i + 1 < starts.length; i++) {
@@ -566,41 +673,6 @@ public final class ClientPathBench {
                     tess.setBrightness(light[col]);
                 }
                 tess.setNormal(d[k + 3], d[k + 4], d[k + 5]);
-                tess.addVertexWithUV(d[k], d[k + 1], d[k + 2], tu + d[k + 7], tv + d[k + 8]);
-            }
-        }
-        sink += tess.raw[tess.idx / 2];
-    }
-
-    /**
-     * O de agora: o que o Tessellator guarda de um vértice para o outro só é mandado quando muda; sem normal com own.
-     */
-    private static void emitNew(FakeTess tess, float[] d, int[] starts, List<int[]> vis, boolean own, int[] light) {
-        tess.start();
-        boolean haveColor = false;
-        int lastColor = 0, lastLight = -1;
-        for (int i = 0; i + 1 < starts.length; i++) {
-            tess.xo = vis.get(i)[0] * 16.0 - 8;
-            tess.yo = -7;
-            tess.zo = vis.get(i)[1] * 16.0 - 8;
-            double tu = (vis.get(i)[0] & 63) * 16.0, tv = (vis.get(i)[1] & 63) * 16.0;
-            for (int k = starts[i], end = starts[i + 1]; k < end; k += OceanMesher.FLOATS) {
-                int rgba = Float.floatToRawIntBits(d[k + 9]);
-                if (!haveColor || rgba != lastColor) {
-                    tess.setColorRGBA(rgba >>> 24, rgba >> 16 & 255, rgba >> 8 & 255, rgba & 255);
-                    lastColor = rgba;
-                    haveColor = true;
-                }
-                if (!own) {
-                    int col = Math.min(15, Math.max(0, (int) d[k + 7]))
-                        + 16 * Math.min(15, Math.max(0, (int) d[k + 8]));
-                    int b = light[col];
-                    if (b != lastLight) {
-                        tess.setBrightness(b);
-                        lastLight = b;
-                    }
-                    tess.setNormal(d[k + 3], d[k + 4], d[k + 5]);
-                }
                 tess.addVertexWithUV(d[k], d[k + 1], d[k + 2], tu + d[k + 7], tv + d[k + 8]);
             }
         }

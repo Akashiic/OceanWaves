@@ -69,6 +69,11 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClie
   nos vértices da aresta e do canto que divide com cada vizinho desenhado ela dá o mesmo valor (os que discordam trocam
   juntos). Um chunk sem costa não é desenhado. `Column.shore` nunca é `null` depois de pronta (sem costa: `OPEN_SEA`).
   Mexeu nisto: rode `ShoreSchedulerTest` e `ShoreWindowTest`, além dos testes de borda do core.
+* **O envio dos vértices é o `VertexEmitter`** (sem Minecraft, sobre um `VertexSink`: o `Tessellator` no jogo, um
+  gravador nos testes e no `clientBench`), e onde a malha de cada chunk começa está no `ChunkSpans`, que só cresce:
+  percorra `count()`, nunca o comprimento do vetor (já desligou o mar: o laço ia até o fim do vetor e lia chunks que não
+  existem). Mexeu nisto: rode `VertexEmitterTest`. O `SpectralLod` é imutável no núcleo: o `LodMemo` o reaproveita com a
+  câmera parada; andando sobra um objeto de 80 bytes por passe (dito em docs/PLANO-DE-TESTES.md, 2b).
 * Não quebrar o jogo: o renderizador desliga a si mesmo com um log se lançar `RuntimeException` ou `LinkageError`, e a
   face de cima da água do terreno **volta** (`RendererHealth`: o `hideTopFace` respeita a falha; a remontagem dos chunks
   é feita pelo `ClientSea.tick`, nunca dentro do `catch`); o `Tessellator` aberto é fechado no `finally`. O F3 diz
