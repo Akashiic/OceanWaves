@@ -73,7 +73,7 @@ public final class OceanWaves {
 
     /**
      * O Y da superfície em repouso no mundo da dimensão: o topo da água da fonte no nível do mar dele (cada mundo tem o
-     * seu: o da configuração, {@code Akashic/Spawn@31}, ou o medido em volta do spawn).
+     * seu: o da configuração, {@code Akashic/Spawn@31}, ou o medido em volta do spawn e dos jogadores).
      */
     public static double restLevel(int dimension) {
         return ServerSea.INSTANCE.seaLevel(dimension) - 1 + OceanColumns.SOURCE_TOP;

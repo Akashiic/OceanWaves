@@ -163,6 +163,15 @@ medido pelo servidor em volta do spawn. Teste com o mundo de verdade e o `oceanw
    o reflexo do céu da superfície do OceanWaves. De cima para baixo: antes, depois, o Neo States sem ondas:
 
    ![O mar com o Neo States: antes, depois e sem ondas](img/real/neostates-mar-tres.jpg)
+6. **No servidor de produção, o mundo ficou no nível geral (63) e ninguém via ondas.** Com `Akashic/Spawn` sem o `@` na
+   configuração, o servidor mede o nível; a medida só olhava em volta do spawn do mundo, e lá os chunks não ficam
+   carregados (o jogador entrou em z 3812). O log dizia "nível do mar 63 (o geral, até dar para medir)" e nunca
+   mediu. Correção: a medida olha também em volta de cada jogador do mundo (a mesma grade de 13 × 13 colunas, a mesma
+   coluna não vota duas vezes), a cada segundo até conseguir. Reproduzido aqui com o spawn do mundo levado para
+   (20000, 20000): antes, 63 para sempre; depois, "Nível do mar de Akashic/Spawn medido: 31" assim que o jogador
+   chegou, e as ondas no mar ao norte da ilha (abaixo). Com `Akashic/Spawn@31` na configuração não há medida nenhuma.
+
+   ![O nível medido em volta do jogador](img/real/nivel-medido-no-jogador.jpg)
 
 ## Shaderpacks: BSL e Complementary — integrados
 

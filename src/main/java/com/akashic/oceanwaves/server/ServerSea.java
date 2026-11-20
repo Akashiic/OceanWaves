@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.block.material.Material;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChunkCoordinates;
@@ -49,7 +50,9 @@ public final class ServerSea {
     private final Map<Integer, SeaRegion> regions = new ConcurrentHashMap<>();
     /** O nível do mar de cada mundo com ondas (o bloco de água mais alto é o nível − 1). */
     private final Map<Integer, Integer> levels = new ConcurrentHashMap<>();
-    /** Mundos cujo nível ainda não deu para medir (as colunas em volta do spawn não estavam carregadas). */
+    /**
+     * Mundos cujo nível ainda não deu para medir (as colunas em volta do spawn e dos jogadores não estavam carregadas).
+     */
     private final Map<Integer, Boolean> unmeasured = new ConcurrentHashMap<>();
     /** A dimensão do último mar mandado a cada jogador (o teleporte de plugin nem sempre passa pelos eventos). */
     private final Map<UUID, Integer> sent = new HashMap<>();
@@ -134,33 +137,26 @@ public final class ServerSea {
     }
 
     /**
-     * Mede o nível do mar de um mundo: o bloco mais alto de colunas em volta do spawn (uma grade de 13 × 13 pontos, de
-     * 16 em 16 blocos, só em chunks já carregados); se a maioria das que acabam em água acaba no mesmo y, o nível é
-     * y + 1. Null se não há colunas de água bastantes (chunks ainda não carregados, ou um mundo sem mar ali).
+     * Mede o nível do mar de um mundo: o bloco mais alto de colunas em volta do spawn e de cada jogador nesse mundo
+     * (uma grade de 13 × 13 pontos, de 16 em 16 blocos, em volta de cada um, só em chunks já carregados); se a maioria
+     * das que acabam em água acaba no mesmo y, o nível é y + 1. Null se não há colunas de água bastantes (chunks ainda
+     * não carregados, ou um mundo sem mar ali). Os jogadores entram porque o spawn de um mundo do Multiverse pode não
+     * ficar carregado: no servidor do TEOF o mundo ficou no nível geral (63) com o mar no y 30, e ninguém via ondas.
      */
     static Integer measure(WorldServer w) {
+        Map<Long, Integer> columns = new HashMap<>();
         ChunkCoordinates spawn = w.getSpawnPoint();
+        sample(w, spawn.posX, spawn.posZ, columns);
+        for (Object o : w.playerEntities) {
+            EntityPlayer p = (EntityPlayer) o;
+            sample(w, (int) Math.floor(p.posX), (int) Math.floor(p.posZ), columns);
+        }
         Map<Integer, Integer> votes = new HashMap<>();
         int waterColumns = 0;
-        for (int i = -6; i <= 6; i++) {
-            for (int k = -6; k <= 6; k++) {
-                int x = spawn.posX + i * 16, z = spawn.posZ + k * 16;
-                if (!w.getChunkProvider()
-                    .chunkExists(x >> 4, z >> 4)) {
-                    continue;
-                }
-                for (int y = w.getActualHeight() - 1; y >= 0; y--) {
-                    Material mat = w.getBlock(x, y, z)
-                        .getMaterial();
-                    if (mat == Material.air) {
-                        continue;
-                    }
-                    if (mat == Material.water) {
-                        votes.merge(y, 1, Integer::sum);
-                        waterColumns++;
-                    }
-                    break;
-                }
+        for (int y : columns.values()) {
+            if (y >= 0) {
+                votes.merge(y, 1, Integer::sum);
+                waterColumns++;
             }
         }
         int best = -1, count = 0;
@@ -171,6 +167,37 @@ public final class ServerSea {
             }
         }
         return waterColumns >= 8 && count * 2 > waterColumns ? best + 1 : null;
+    }
+
+    /**
+     * Uma grade de 13 × 13 colunas, de 16 em 16 blocos, em volta de (cx, cz), alinhada à grade do mundo (a mesma
+     * coluna não vota duas vezes): o y da água mais alta, ou −1 se a coluna acaba noutra coisa.
+     */
+    private static void sample(WorldServer w, int cx, int cz, Map<Long, Integer> columns) {
+        int bx = Math.floorDiv(cx, 16) * 16 + 8, bz = Math.floorDiv(cz, 16) * 16 + 8;
+        for (int i = -6; i <= 6; i++) {
+            for (int k = -6; k <= 6; k++) {
+                int x = bx + i * 16, z = bz + k * 16;
+                long key = ((long) x << 32) ^ (z & 0xFFFFFFFFL);
+                if (columns.containsKey(key) || !w.getChunkProvider()
+                    .chunkExists(x >> 4, z >> 4)) {
+                    continue;
+                }
+                int top = -1;
+                for (int y = w.getActualHeight() - 1; y >= 0; y--) {
+                    Material mat = w.getBlock(x, y, z)
+                        .getMaterial();
+                    if (mat == Material.air) {
+                        continue;
+                    }
+                    if (mat == Material.water) {
+                        top = y;
+                    }
+                    break;
+                }
+                columns.put(key, top);
+            }
+        }
     }
 
     /** Acerta o nível do mar do mundo: o da configuração ({@code nome@nível}), o medido, ou o geral. Diz qual. */
@@ -186,7 +213,7 @@ public final class ServerSea {
         if (measured != null) {
             levels.put(dim, measured);
             unmeasured.remove(dim);
-            return "medido em volta do spawn";
+            return "medido em volta do spawn e dos jogadores";
         }
         levels.put(dim, OceanConfig.seaLevel);
         unmeasured.put(dim, Boolean.TRUE);

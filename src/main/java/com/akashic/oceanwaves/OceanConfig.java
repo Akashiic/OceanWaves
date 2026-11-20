@@ -34,7 +34,7 @@ public final class OceanConfig {
     public static java.util.List<String> worlds = new java.util.ArrayList<>();
     /**
      * O nível do mar de cada mundo da lista que o diz ({@code Akashic/Spawn@31}: o bloco de água mais alto é o 30); os
-     * que não dizem são medidos pelo servidor em volta do spawn ({@code server.ServerSea}).
+     * que não dizem são medidos pelo servidor em volta do spawn e dos jogadores ({@code server.ServerSea}).
      */
     public static java.util.Map<String, Integer> worldLevels = new java.util.HashMap<>();
     /** Nenhum dos {@link #worlds} existe neste servidor (jogo sozinho, outro servidor): ondas no mundo principal. */
@@ -123,7 +123,7 @@ public final class OceanConfig {
             new String[] { "Akashic/Spawn@31" },
             "Mundos com ondas: o nome da pasta do mundo (o do Multiverse, ex.: Akashic/Spawn) ou o número da dimensão, "
                 + "com o nível do mar depois de @ (Akashic/Spawn@31: a água mais alta no y 30). Sem o @, o servidor mede o "
-                + "nível em volta do spawn do mundo. Nos outros mundos a água é a vanilla.")
+                + "nível em volta do spawn do mundo e dos jogadores nele (escreva o @ quando souber: não depende de medir). Nos outros mundos a água é a vanilla.")
             .getStringList()) {
             String t = w.trim();
             int at = t.lastIndexOf('@');
