@@ -49,7 +49,6 @@ public final class OceanRenderer {
     private final EdgeFade edge = new EdgeFade();
     private OceanMesher mesher;
     private int meshedVersion = -1;
-    private boolean failed;
 
     // medidas, para o F3
     long lastMeshNanos;
@@ -122,7 +121,7 @@ public final class OceanRenderer {
 
     /** Chamado no fim do passe 1 do terreno. */
     public void render(float partialTicks) {
-        if (failed || !ClientSea.active()) {
+        if (ClientSea.rendererFailed() || !ClientSea.active()) {
             return;
         }
         boolean shadow = ShaderPacks.inUse() && ShaderPacks.renderingShadowPass();
@@ -134,10 +133,11 @@ public final class OceanRenderer {
         }
         try {
             draw(partialTicks, shadow);
-        } catch (RuntimeException e) {
-            // nunca derrubar o jogo por causa do mar: desliga e explica
-            failed = true;
-            OceanWavesMod.LOG.error("O desenho do mar falhou e foi desligado nesta sessão", e);
+        } catch (RuntimeException | LinkageError e) {
+            // nunca derrubar o jogo por causa do mar (nem por um método que o Angelica mudou: NoSuchMethodError e
+            // companhia são LinkageError): desliga, e a face de cima da água vanilla volta (ClientSea, no tick)
+            ClientSea.reportRendererFailure(e);
+            OceanWavesMod.LOG.error("O desenho do mar falhou e foi desligado nesta sessão; a água do terreno volta", e);
         }
     }
 
@@ -153,6 +153,14 @@ public final class OceanRenderer {
     public void newFrame() {
         frame++;
     }
+
+    /**
+     * Para ver em jogo o que acontece quando o desenho falha (a água do terreno volta, o F3 avisa):
+     * {@code -Doceanwaves.failRenderAt=N} lança uma exceção no N-ésimo desenho, com o Tessellator já aberto (o pior
+     * lugar). Sem a chave, nada.
+     */
+    private static final int FAIL_AT = Integer.getInteger("oceanwaves.failRenderAt", 0);
+    private int drawCount;
 
     private void draw(float partial, boolean shadow) {
         Minecraft mc = Minecraft.getMinecraft();
@@ -317,8 +325,13 @@ public final class OceanRenderer {
         if (!own && ShaderPacks.inUse()) {
             IrisBridge.begin();
         }
+        boolean started = false, drawn = false;
         try {
             tess.startDrawingQuads();
+            started = true;
+            if (FAIL_AT > 0 && ++drawCount == FAIL_AT) {
+                throw new IllegalStateException("falha de teste (-Doceanwaves.failRenderAt=" + FAIL_AT + ")");
+            }
             float[] d = buffer.data;
             for (int i = 0; i + 1 < starts.length; i++) {
                 OceanChunks.Column c = visible.get(i);
@@ -343,8 +356,17 @@ public final class OceanRenderer {
             lastProgram = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL20.GL_CURRENT_PROGRAM);
             lastPhase = IrisBridge.phase();
             tess.draw();
+            drawn = true;
             lastGlNanos = System.nanoTime() - d0;
         } finally {
+            if (started && !drawn) {
+                // uma exceção no meio: o Tessellator não pode ficar aberto (o vanilla travaria no próximo uso)
+                try {
+                    tess.draw();
+                } catch (RuntimeException ignored) {
+                    // já fechado
+                }
+            }
             IrisBridge.end();
             tess.setTranslation(0, 0, 0);
             GL11.glDepthMask(depthMask);
@@ -364,6 +386,5 @@ public final class OceanRenderer {
 
     void onWorldChange() {
         texture.delete();
-        failed = false;
     }
 }

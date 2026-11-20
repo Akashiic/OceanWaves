@@ -72,6 +72,10 @@ public final class ClientProxy extends CommonProxy {
         if (!mc.gameSettings.showDebugInfo) {
             return;
         }
+        if (ClientSea.rendererFailed()) {
+            e.left.add("[Ondas] desligadas por erro: " + ClientSea.rendererFailure() + " (ver o log)");
+            return;
+        }
         if (!ClientSea.active()) {
             e.left.add("[Ondas] desligadas");
             return;
