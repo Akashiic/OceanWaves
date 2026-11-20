@@ -62,34 +62,69 @@ class RendererHealthTest {
     @Test
     void remountRequestsOfATickAreMergedIntoOne() {
         RemountRequest r = new RemountRequest();
-        assertFalse(r.take(true), "nada pedido");
+        assertFalse(r.take(true, true), "nada pedido");
         r.activation();
         r.level();
         r.region();
         r.failure();
-        assertTrue(r.take(true));
-        assertFalse(r.take(true), "os pedidos foram consumidos");
+        assertTrue(r.take(true, true));
+        assertFalse(r.take(true, true), "os pedidos foram consumidos");
     }
 
     @Test
     void seaLevelChangeRemountsOnlyWhileTheSeaIsActive() {
         RemountRequest r = new RemountRequest();
         r.level();
-        assertFalse(r.take(false), "sem mar ativo a face de cima nunca foi escondida: nada a remontar");
+        assertFalse(r.take(false, true), "sem mar ativo a face de cima nunca foi escondida: nada a remontar");
         r.level();
-        assertTrue(r.take(true), "VIS-5: o nível mudou com o mar ativo, o terreno montado com o outro nível é refeito");
+        assertTrue(
+            r.take(true, true),
+            "VIS-5: o nível mudou com o mar ativo, o terreno montado com o outro nível é refeito");
     }
 
     @Test
     void activationAlwaysRemountsAndRegionAndFailureNeedAnActiveSea() {
         RemountRequest r = new RemountRequest();
         r.activation();
-        assertTrue(r.take(false), "desligar o mar: a face de cima precisa voltar");
+        assertTrue(r.take(false, true), "desligar o mar: a face de cima precisa voltar");
         r.region();
-        assertFalse(r.take(false));
+        assertFalse(r.take(false, true));
         r.failure();
-        assertFalse(r.take(false));
+        assertFalse(r.take(false, true));
         r.region();
-        assertTrue(r.take(true));
+        assertTrue(r.take(true, true));
+    }
+
+    /** Sem RenderGlobal (mundo carregado, renderizador do vanilla ainda não montado) o pedido não se perde. */
+    @Test
+    void aRequestWaitsWhileTheTerrainCannotBeRemountedYet() {
+        RemountRequest r = new RemountRequest();
+        r.level();
+        r.failure();
+        assertFalse(r.take(true, false), "sem RenderGlobal: nada a fazer agora");
+        assertFalse(r.take(true, false), "e continua esperando");
+        assertTrue(r.take(true, true), "no primeiro tick em que dá, o pedido é atendido");
+        assertFalse(r.take(true, true), "e só uma vez");
+    }
+
+    @Test
+    void aRequestThatWaitedIsStillJudgedByTheSeaStateWhenItIsServed() {
+        RemountRequest r = new RemountRequest();
+        r.region();
+        assertFalse(r.take(true, false));
+        // o mar foi desligado enquanto esperava: a face de cima nunca foi escondida, nada a remontar
+        assertFalse(r.take(false, true));
+        r.activation();
+        assertFalse(r.take(false, false));
+        assertTrue(r.take(false, true), "desligar o mar sempre remonta, mesmo depois de esperar");
+    }
+
+    @Test
+    void withoutAWorldTheRequestsAreForgotten() {
+        RemountRequest r = new RemountRequest();
+        r.activation();
+        r.level();
+        r.clear();
+        assertFalse(r.take(true, true), "o mundo novo monta com o estado em vigor: não há o que refazer");
     }
 }

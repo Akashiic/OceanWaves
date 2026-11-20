@@ -174,8 +174,12 @@ public final class ClientSea {
             // o renderizador falhou: a face de cima volta
             REMOUNT.failure();
         }
-        // um pedido só por tick, com o estado já atualizado
-        if (REMOUNT.take(active) && mc.renderGlobal != null && w != null) {
+        // um pedido só por tick, com o estado já atualizado. Sem mundo, nada a remontar (o mundo novo monta com o
+        // estado
+        // em vigor); com mundo mas sem RenderGlobal o pedido espera, não se perde
+        if (w == null) {
+            REMOUNT.clear();
+        } else if (REMOUNT.take(active, mc.renderGlobal != null)) {
             mc.renderGlobal.loadRenderers();
         }
     }
