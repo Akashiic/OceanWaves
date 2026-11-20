@@ -22,7 +22,7 @@ não as construiu).
 | 1 | Auditoria sem alterar código → `DIAGNOSTICO.md` | **feita**: 8 frentes (`docs/auditoria/`), 32 achados graves revistos por céticos que não os escreveram, nenhum refutado por inteiro, 25 correções aplicadas |
 | 2 | Linha de base de FPS (medida pelo usuário: roteiro no `DIAGNOSTICO.md`) | **aguardando os números do usuário**; jar `c56f672` entregue |
 | 3 | Priorização das correções | **feita**: `DIAGNOSTICO.md` §4 e as decisões do engenheiro-chefe |
-| 4 | Correções, cada uma compilada, testada e revisada | **em andamento**: leva A (falhas graves do cliente e cortes de FPS; amostrador da superfície com cinemática; detecção segura no Expeditions) |
+| 4 | Correções, cada uma compilada, testada e revisada | **em andamento**: leva A 2/3 aprovadas e integradas (cliente; detecção no Expeditions), amostrador na 3ª rodada; leva B1 em andamento (threads, casco = ficha, Neo API 5) |
 | 5 | Meta: barco/fragata seguem altura e inclinação da onda, FPS ≥ 90% da linha de base | pendente |
 
 ## Registro das entregas
@@ -31,6 +31,19 @@ não as construiu).
   e Haiku (inventário). Conferida: cada achado grave tem evidência em arquivo e linha ou em bytecode, e foi revisado
   por outro agente (Sonnet). As medidas fora do jogo foram reexecutadas pelos revisores (`PerfBench`, sondas do
   Expeditions e do Kunftig). Nenhum FPS foi inventado.
+
+* 2026-11-20, leva A, **cliente** (OceanWaves `9ca720d`): VIS-4 (falha devolve a água do terreno), VIS-5 (nível do mar
+  invalida o cache), PERF-3/4/5/7/8 e o O8. Reprovada na 1ª revisão por um bug grave que desligaria o mar (o laço de
+  envio ia até o fim do vetor de inícios); corrigida e aprovada na 2ª. Medido fora do jogo (`clientBench`, Java 8 e
+  21): grade em alto-mar 2,62→2,25 ms; chegada de chunk 4,6-6,0→0,07-0,12 ms; lixo por quadro 17-21 KB→0 nos laços;
+  chamadas ao Tessellator 184 mil→72 mil por quadro; com shaderpack 2,5→1,05 ms e a sombra da água desligada por
+  padrão. Core passa no Java 8 e no 21. Em jogo: [a verificar] (roteiros 10-14 do PLANO-DE-TESTES).
+* 2026-11-20, leva A, **detecção** (Expeditions `5792b7f`): o plugin sobe sem o OceanWaves (`OceanWavesLink`); teste
+  com ClassLoader que esconde o mod reproduz o `NoClassDefFoundError` antigo e passa com a correção. Aprovada na 1ª
+  revisão. Num Crucible sem o mod: [a verificar].
+* Amostrador: reprovado duas vezes (janela da costa refeita a cada consulta; relógio que congelaria abaixo de ~8 TPS;
+  `waves()` que quebraria a detecção de mudança do Expeditions). A escalada ao Fable não foi possível (limite de uso
+  até 21/11 20h UTC): 3ª rodada com Opus no esforço máximo e revisão independente.
 
 ## Pendências
 
