@@ -57,7 +57,13 @@ public final class OceanRenderer {
     private Frustrum frustum;
     private OceanMesher mesher;
     private int meshedVersion = -1;
-    private int[] starts = new int[0];
+    /**
+     * Onde começa a malha de cada chunk no buffer do passe (o vetor só cresce: use {@code count()}, não o comprimento).
+     */
+    private final ChunkSpans spans = new ChunkSpans();
+    /** O {@code SpectralLod} do passe principal e o da sombra, reaproveitados enquanto a câmera não anda. */
+    private final LodMemo[] lodMemo = { new LodMemo(), new LodMemo() };
+    private final TessellatorSink sink = new TessellatorSink();
 
     // medidas, para o F3
     long lastMeshNanos;
@@ -305,16 +311,7 @@ public final class OceanRenderer {
             visible.add(c);
         }
         // do mais perto para o mais longe (a espiral já vem quase assim: inserção, sem alocar)
-        for (int i = 1; i < visible.size(); i++) {
-            OceanChunks.Column c = visible.get(i);
-            double d = dist2(c, camX, camZ);
-            int j = i - 1;
-            while (j >= 0 && dist2(visible.get(j), camX, camZ) > d) {
-                visible.set(j + 1, visible.get(j));
-                j--;
-            }
-            visible.set(j + 1, c);
-        }
+        NearestFirst.sort(visible, camX, camZ);
     }
 
     /**
@@ -338,16 +335,14 @@ public final class OceanRenderer {
         double base = pack ? Math.max(OceanConfig.minSpacing, OceanConfig.shaderMinSpacing) : OceanConfig.minSpacing;
         double minSpacing = shadow ? Math.max(4, base) : base;
         FloatBuffer buffer = shadow ? shadowBuffer : this.buffer;
-        SpectralLod lod = new SpectralLod(camX, camY, camZ, rest, minSpacing, OceanConfig.lodFactor, 2.5, 5.0);
+        SpectralLod lod = lodMemo[shadow ? 1 : 0]
+            .get(camX, camY, camZ, rest, minSpacing, OceanConfig.lodFactor, 2.5, 5.0);
         buffer.clear();
-        if (starts.length < visible.size() + 1) {
-            starts = new int[Math.max(visible.size() + 1, 2 * starts.length)];
-        }
-        int[] starts = this.starts;
+        spans.reset(visible.size());
         int quads = 0;
         for (int i = 0; i < visible.size(); i++) {
             OceanChunks.Column c = visible.get(i);
-            starts[i] = buffer.size;
+            spans.begin(i, buffer.size);
             double s = OceanMesher.spacingFor(lod, c.cx, c.cz, minSpacing);
             neighbours[0] = OceanMesher.spacingFor(lod, c.cx - 1, c.cz, minSpacing);
             neighbours[1] = OceanMesher.spacingFor(lod, c.cx + 1, c.cz, minSpacing);
@@ -357,10 +352,10 @@ public final class OceanRenderer {
             Attenuation att = OceanConfig.edgeFade ? edge.around(c.shore, c.cx * 16.0, c.cz * 16.0) : c.shore;
             quads += mesher.mesh(c.cx, c.cz, s, neighbours, c.open, seaTime, lod, att, shader, buffer);
         }
-        starts[visible.size()] = buffer.size;
+        spans.end(buffer.size);
         long t1 = System.nanoTime();
 
-        submit(mc, partial, shadow, pack, starts, buffer);
+        submit(mc, partial, shadow, pack, buffer);
         long t2 = System.nanoTime();
         if (shadow) {
             // as medidas do F3 e do harness são as da passagem principal
@@ -377,12 +372,7 @@ public final class OceanRenderer {
         avgGl += (lastGlNanos - avgGl) * 0.05;
     }
 
-    private static double dist2(OceanChunks.Column c, double x, double z) {
-        double dx = c.cx * 16 + 8 - x, dz = c.cz * 16 + 8 - z;
-        return dx * dx + dz * dz;
-    }
-
-    private void submit(Minecraft mc, float partial, boolean shadow, boolean pack, int[] starts, FloatBuffer buffer) {
+    private void submit(Minecraft mc, float partial, boolean shadow, boolean pack, FloatBuffer buffer) {
         boolean own = shader.own;
         // o estado que o vanilla deixa ao fim do passe translúcido não muda de um quadro para o outro: lido de vez em
         // quando e quando a situação muda, não todo quadro
@@ -421,41 +411,9 @@ public final class OceanRenderer {
             if (FAIL_AT > 0 && ++drawCount == FAIL_AT) {
                 throw new IllegalStateException("falha de teste (-Doceanwaves.failRenderAt=" + FAIL_AT + ")");
             }
-            float[] d = buffer.data;
-            // O que o Tessellator guarda de um vértice para o seguinte (cor, luz, normal) só é mandado quando muda: com
-            // shaderpack a cor é a da água em quase todo vértice, e a luz do chunk, uma só. Com a luz já na cor (own)
-            // a normal não é usada (o desenho não liga a iluminação do GL) e nem é mandada.
-            boolean haveColor = false;
-            int lastColor = 0;
-            int lastLight = -1;
-            for (int i = 0; i + 1 < starts.length; i++) {
-                OceanChunks.Column c = visible.get(i);
-                double ox = c.cx * 16.0, oz = c.cz * 16.0;
-                // a textura se repete a cada bloco: a coordenada vai pequena (precisão do float longe da origem)
-                double tu = (c.cx & 63) * 16.0, tv = (c.cz & 63) * 16.0;
-                tess.setTranslation(ox - camX, rest - camY, oz - camZ);
-                int[] light = c.light;
-                for (int k = starts[i], end = starts[i + 1]; k < end; k += OceanMesher.FLOATS) {
-                    int rgba = Float.floatToRawIntBits(d[k + 9]);
-                    if (!haveColor || rgba != lastColor) {
-                        tess.setColorRGBA(rgba >>> 24, rgba >> 16 & 255, rgba >> 8 & 255, rgba & 255);
-                        lastColor = rgba;
-                        haveColor = true;
-                    }
-                    if (!own) {
-                        int col = Math.min(15, Math.max(0, (int) d[k + 7]))
-                            + 16 * Math.min(15, Math.max(0, (int) d[k + 8]));
-                        int b = light[col];
-                        if (b != lastLight) {
-                            tess.setBrightness(b);
-                            lastLight = b;
-                        }
-                        tess.setNormal(d[k + 3], d[k + 4], d[k + 5]);
-                    }
-                    // a textura acompanha a posição de repouso das partículas da superfície
-                    tess.addVertexWithUV(d[k], d[k + 1], d[k + 2], tu + d[k + 7], tv + d[k + 8]);
-                }
-            }
+            // o laço de envio (cor, luz e normal só quando mudam) é o VertexEmitter, que roda também fora do jogo
+            sink.use(tess);
+            VertexEmitter.emit(sink, visible, spans, buffer.data, own, camX, camY, camZ, rest);
             long d0 = System.nanoTime();
             if (diagnostics) {
                 lastProgram = GL11.glGetInteger(org.lwjgl.opengl.GL20.GL_CURRENT_PROGRAM);
