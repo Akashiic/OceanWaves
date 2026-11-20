@@ -11,6 +11,9 @@ não as construiu).
 * A fragata tem de flutuar no mar do OceanWaves de verdade: o movimento sai da física das ondas (hidrostática e
   dinâmica), sem animação feita para enganar o olho. Pode mexer no Expeditions (e no Kunftig) com liberdade.
 * Barcos: os do Expeditions; o barco do Et Futurum foi o teste. As entidades em geral devem perceber o mar (nadar etc.).
+* Nos testes pode tirar o CastleOfStone, o BungeeGuard e o que mais limitar (só servem à produção).
+* A escala do mar fica a critério do engenheiro-chefe, com pesquisa (fidelidade e imersão).
+* O branch `n82b79` do Expeditions era do próprio usuário e está livre: construímos sobre ele.
 
 ## Etapas
 
@@ -34,4 +37,5 @@ não as construiu).
 * Etapa 2: os números de FPS (i) sem o OceanWaves e (ii) com o `c56f672`, medidos pelo usuário.
 * Etapa 4: leva A em andamento. Depois dela: leva B (pressão no casco e corpo de 6 graus da fragata, casco = ficha,
   previsão no Kunftig, barco do Et Futurum, Neo States API 5, malha em threads) e leva C (visual).
-* Pergunta ao usuário: a escala de Froude 0,5 do mar com o navio a 1 bloco = 1 m é intencional? (`DIAGNOSTICO.md` §5, 6)
+* Escala do mar: pesquisa em andamento (`R-escala`), decisão do engenheiro-chefe depois.
+* Ambiente real de teste (servidor Forbidden + cliente TEOF sem tela) sendo montado, para testar o comportamento.
