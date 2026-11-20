@@ -198,7 +198,7 @@ O que mais apareceu e foi corrigido nessas rodadas:
   próprio (`ViewCone`).
 * **Chunks que chegam depois**: com o Celeritas, o aviso `markBlockRangeForRenderUpdate` não chega a quem se registra
   no mundo; um chunk lido antes de chegar ficava vazio para sempre (visto: 213 no cache, 15 lidos). Agora o cache
-  confere a cada quadro se ele chegou e relê alguns chunks em rodízio.
+  confere a cada quadro se ele chegou e relê alguns chunks em rodízio (desde a auditoria de desempenho, o rodízio roda no tick do cliente, e a passagem de sombra vem desligada por padrão).
 * **Sombra da água**: a face vanilla escondida tirava a água do mapa de sombra do pack. Agora o mar é desenhado também
   na passagem de sombra, com uma malha grossa própria (células de 4 blocos ou mais).
 * **Borda com o Distant Horizons (Mirai)**: as ondas morrem nos últimos chunks do alcance para encontrar a água plana

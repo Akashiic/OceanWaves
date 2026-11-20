@@ -33,7 +33,8 @@ Lido no código do Angelica 2.2.43 (decompilado com o CFR):
 * recorte por **cone de visão** próprio (`ViewCone`) com shaderpack;
 * na passagem de sombra o mar é desenhado também (o pack ganha a superfície da água no `shadowtex`: sombra colorida e
   cáusticas), com uma **malha grossa própria** (células de 4 blocos ou mais) e sem recorte da câmera
-  (`desenho.sombraDaAgua`). Tentado antes: fazer a malha cheia na sombra e reaproveitá-la na passagem principal. Não
+  (`desenho.sombraDaAguaComShader`, **desligada por padrão** desde a auditoria de desempenho: repete a malha do mar
+  inteira, sem recorte, só para o mapa de sombra; a chave antiga `sombraDaAgua` valia ligada). Tentado antes: fazer a malha cheia na sombra e reaproveitá-la na passagem principal. Não
   compensa: o caro com shaderpack é enviar cada vértice pelo `Tessellator` do Angelica (que monta o formato estendido
   do Iris), não calcular a malha, e a sombra não precisa da malha cheia.
 
@@ -42,7 +43,9 @@ Lido no código do Angelica 2.2.43 (decompilado com o CFR):
 * **Custo**: com shaderpack, enviar um vértice pelo `Tessellator` do Angelica sai muito mais caro que sem (medido aqui,
   em GL por software e com a CPU disputada: ~160 a 230 ms por ~18 mil quads, contra ~10 ms por ~16 mil sem shader).
   Em placa de vídeo **[a verificar]**. Se pesar, o caminho é um VBO próprio no formato do Iris, ou células maiores
-  perto da câmera com shaderpack (o pack já põe o detalhe fino por pixel).
+  perto da câmera com shaderpack (o pack já põe o detalhe fino por pixel). Este último foi feito: com shaderpack o
+  espaçamento mínimo da malha é 2 (`desenho.espacamentoComShader`), 68% menos vértices; falta ver o visual de perto com
+  o BSL **[a verificar]**.
 
 * Vale para qualquer pack que siga o contrato do Iris (`gbuffers_water` + `mc_Entity` do `block.properties`): visto
   no BSL e no Complementary. **[a verificar]** com outros packs do Iris 1.7.10 e com o Angelica de outras versões (se

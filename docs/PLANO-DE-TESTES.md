@@ -3,7 +3,7 @@
 Três camadas: o núcleo (JUnit, sem Minecraft), o cliente de desenvolvimento sem tela (o harness), e o servidor TEOF
 de verdade. O que só a última pode dizer está marcado **[a verificar]**.
 
-## 1. Núcleo (JUnit): 41 testes, todos passando
+## 1. Núcleo (JUnit): 47 testes, todos passando
 
 `./gradlew :core:test` (ou `build`). Passam também no **Java 8** (Temurin 8u512) e no Java 21.
 
@@ -14,11 +14,24 @@ de verdade. O que só a última pode dizer está marcado **[a verificar]**.
 | `OceanFieldTest` | derivadas, normal e velocidade contra diferenças finitas; inversa com resíduo < 10⁻⁶ m em ≤ 5 iterações; partida quente em 1 iteração; **nunca dobra** (J ≥ (1 − L)²); nível médio euleriano = repouso; crista/vale de Stokes; atenuação zero = água parada |
 | `GridEvaluatorTest` | grade = consultas pontuais (2·10⁻⁴); caminho rápido = analítico (posições) e normais a 3%; tabelas do quadro = sem tabelas; vizinhos de mesmo espaçamento com vértices e normais iguais; vizinhos de espaçamentos diferentes com o mesmo vértice na aresta; longe sobram só as ondas longas |
 | `HeightPatchTest` | retalho do casco < 2 cm rms da inversa exata; fora da grade = NaN |
-| `ShoreFieldTest` | transformada de distância exata (contra força bruta); costa = zero em toda a aresta; crescimento monótono; limite de quebra pela profundidade; **a costa nunca dobra a superfície**; o limite não come o mar aberto; **chunks vizinhos concordam na borda** (a fresta vista no ambiente real) |
+| `ShoreFieldTest` | transformada de distância exata (contra força bruta); costa = zero em toda a aresta; crescimento monótono; limite de quebra pela profundidade; **a costa nunca dobra a superfície**; o limite não come o mar aberto; **chunks vizinhos concordam na borda** (a fresta vista no ambiente real); **região de mar aberto fundo é `uniform()` e vale exatamente 1** (mesmo com o par log/exp do limite de gradiente), com costa ou fundo raso não é; o caminho uniforme da grade dá a mesma superfície que o caminho por ponto; um chunk uniforme e o vizinho calculado concordam exatamente na borda |
 | `OceanMesherTest` | área coberta = colunas de mar, em todos os espaçamentos; poucos quads longe; espaçamento cresce com a distância; **junções em T fechadas** |
 | `ClockAndFitTest` | relógio com servidor a 15 TPS e atraso variável: monotônico, estima o TPS, erro < 3,5 ticks; salta em erro grande; plano de mínimos quadrados exato |
 
 Medidas: `./gradlew :core:bench` (`Bench`).
+
+### 1b. Cliente sem Minecraft (JUnit em `src/test`)
+
+`./gradlew test` (o `build` roda). As classes de lógica do cliente não importam o Minecraft, para poderem ser testadas
+com chunks sintéticos (`SyntheticSea`):
+
+| Teste | O que prova |
+|---|---|
+| `RendererHealthTest` | **VIS-4**: com o renderizador falho a face de cima da água do terreno não é mais escondida (e só some com o mar ativo); a falha pede **uma** remontagem, consumida no tick do cliente (não no `catch`); a troca de mundo recomeça. **VIS-5**: um pedido de remontagem por tick, juntando ligar, região, nível e falha; mudança de nível só remonta com o mar ativo. |
+| `StateMemoTest` | **PERF-8**: o estado do GL que se devolve é lido uma vez, de novo quando a situação muda (shaderpack, passagem de sombra, gráficos) e a cada 120 usos, nunca todo quadro |
+| `ColumnRingTest` | o anel de chunks: criar uma vez, `peek` não cria, dois chunks vivos nunca dividem o lugar (com coordenadas grandes e negativas), `prune`, crescer sem perder, a marcação dos 5 × 5 |
+| `ShoreWindowTest` | a janela da costa lida chunk a chunk dá **exatamente** a da leitura coluna a coluna de antes (com chunk não chegado e com região); a janela de mar aberto fundo é a sentinela `OPEN_SEA` e a conta completa dá 1 nela (dos dois lados do limite de profundidade); costa ou fundo raso não é pulada, e nunca devolve null |
+| `ShoreSchedulerTest` | **PERF-3**: mar aberto fundo não gasta orçamento e sai todo num quadro; costas de verdade do mais perto para o mais longe e no máximo `orçamento` por quadro; **nenhum par de chunks desenhados discorda na aresta ou no canto comum em nenhum quadro**, nem durante uma costa nova construída em vários quadros (e o resultado final é o de refazer tudo do zero); o controle: trocar cada costa assim que sai, sem conferir a borda, **abre** fresta; chunk sem costa não é desenhado; troca forçada depois de 240 quadros de espera |
 
 ## 2. Cliente de desenvolvimento (harness)
 
@@ -65,6 +78,31 @@ de cada caso (`run/client/screenshots/ondas-<caso>.png`) e escreve `run/client/o
 * Luz: o brilho do sol, o reflexo do céu mais forte nas faces viradas para longe (Fresnel), o tom turquesa nas cristas,
   e no pôr do sol o reflexo laranja nas faces viradas para o sol.
 
+### 2b. Custo do caminho do renderizador fora do jogo (`./gradlew clientBench`)
+
+`ClientPathBench` (em `src/test`) mede, na mesma execução, uma réplica do que existia ("antes") e o código de agora
+("depois"), sem Minecraft: a cena é a do `PerfBench` da auditoria (distância 8, 78 chunks no leque de ±62° da câmera,
+moderado, 64 componentes). Container sem GPU (4 núcleos); melhor de várias séries; Java 8u514 e Java 21 (a diferença
+entre eles é pequena).
+
+| Medida | Antes | Depois |
+|---|---|---|
+| **A** avaliação da grade, 78 chunks em alto-mar (costa `uniform()`) | 2,62 a 2,66 ms (Java 8), 2,56 a 2,64 ms (21) | 2,25 ms (8), 2,20 a 2,22 ms (21): **−0,35 a −0,4 ms por quadro** |
+| **A** o mesmo, com uma ilha a 40 blocos (66 de 78 chunks uniformes) | 2,63 a 2,81 ms (8), 2,57 ms (21) | 2,32 a 2,42 ms (8), 2,28 a 2,30 ms (21) |
+| **B** um chunk chega e marca os 5 × 5: costas refeitas num quadro só | 4,6 a 5,3 ms (8), 5,4 a 6,0 ms (21), em mar aberto e junto à ilha | mar aberto: 25 janelas sem conta em 1 quadro, **0,07 a 0,12 ms**. Junto à ilha: 9 costas de verdade + 16 janelas de mar aberto, em 5 quadros (orçamento 2), **pior quadro 0,34 a 0,42 ms**, total 1,5 a 1,9 ms |
+| **C** lixo por quadro dos laços de consulta de chunk (213 na espiral), ordenação e vetor de inícios | 17 a 21,5 KB, 14 a 21,5 µs | **0 byte**, 9 a 10 µs |
+| **D** emissão de 61.440 vértices no Tessellator **emulado** (8 ints por vértice, sem o Angelica), com luz própria | 184.320 chamadas, 0,46 a 0,53 ms | 72.015 chamadas (−61%), 0,33 a 0,42 ms |
+| **D** o mesmo, com shaderpack (cor e luz do chunk quase sempre iguais de um vértice ao outro) | 245.760 chamadas, 0,54 a 0,65 ms | 122.882 chamadas (−50%), 0,45 a 0,60 ms |
+| **E** malha de 78 chunks, sem shaderpack (espaçamento 1) | — | 2,5 ms, 15.360 quads |
+| **E** a mesma com shaderpack: espaçamento mínimo 2 (o novo padrão) | (era o 1: 2,5 ms, 15.360 quads) | 1,03 a 1,09 ms, 4.992 quads (−68% dos vértices que o Tessellator do Angelica recebe) |
+| **E** a passagem de sombra (213 chunks, células ≥ 4, sem recorte): desligada por padrão | 1,2 ms de malha + 3.408 quads no formato do Iris, **por quadro** | 0 |
+
+O que isto **não** mede: o `Tessellator` real (3,5 ms no vanilla e 9 a 11 ms no Angelica, GL por software, nos números
+do `PerfBench` da auditoria): o ganho de **D** é no número de chamadas, e o tempo por chamada do Angelica é de 3 a 5
+vezes o do emulado **[a verificar numa GPU e com o Angelica]**; a releitura em rodízio (precisa de `World` e dos
+eventos de cor da água); nem os `glGet*` (de graça com o Angelica, que guarda esses estados; sem ele, hipótese). Nenhum
+número de FPS aqui foi medido em jogo.
+
 ## 3. No jogo de verdade
 
 Feito em 19/11/2026 com os arquivos reais do servidor e do cliente: [TESTES-AMBIENTE-REAL.md](TESTES-AMBIENTE-REAL.md).
@@ -87,3 +125,20 @@ Num cliente TEOF com placa de vídeo, servidor Crucible com o mod, cópia isolad
 8. **`/ondas aqui`**: a altura que o servidor calcula bate com a superfície desenhada no lugar do jogador.
 9. **Embaixo d'água**: a superfície vista de baixo (desenhada nos dois lados) e a névoa (ainda a vanilla: dentro da
    crista a câmera está "fora d'água", ver ARQUITETURA.md, próximas fases).
+10. **Falha do renderizador (VIS-4)** **[a verificar]**: com `-Doceanwaves.failRenderAt=600` o desenho lança uma
+    exceção no 600º quadro, com o `Tessellator` já aberto. Esperado: um erro no log ("O desenho do mar falhou..."), o
+    jogo segue (o `Tessellator` é fechado no `finally`), o F3 mostra "[Ondas] desligadas por erro", e **em até um tick**
+    a água do terreno (com a face de cima) volta nos chunks de mar, sem buraco; trocar de mundo religa o mar.
+11. **Nível do mar medido depois da entrada (VIS-5)** **[a verificar]**: servidor com `Akashic/Spawn` sem o `@` (mede o
+    nível, 31, depois de o cliente já ter montado chunks com o 63), entrar logo e ficar no spawn. Esperado: ao chegar a
+    mensagem com o nível novo, o log mostra "Mar do servidor...", o terreno é remontado uma vez e o mar aparece em
+    y = 30 em todos os chunks, sem água vanilla plana nos já montados e sem buracos.
+12. **Costa em pedaços (PERF-3)** **[a verificar]**: andar ao longo da costa do `Akashic/Spawn` e teleportar para perto
+    dela; olhar as bordas de chunk (F3+G) à procura de fresta, e o tempo de quadro à procura de pico (o F3 só mostra a média). O teste
+    JUnit garante que nenhum par de chunks desenhados discorda na borda; falta ver no jogo a espera de chunks novos
+    junto à costa (ficam sem mar por alguns quadros).
+13. **Padrões com shaderpack (PERF-5)** **[a verificar]**: com BSL, o mar sai com espaçamento 2 e sem a sombra da água;
+    comparar o visual de perto (as ondinhas finas vêm do pack) e, com `desenho.sombraDaAguaComShader=true`, a sombra.
+14. **Releitura no tick (PERF-4)** **[a verificar]**: pôr e tirar um bloco no mar longe da câmera (pelo Celeritas, que
+    não manda o aviso): o mar acompanha em até alguns segundos (o rodízio é de 2 chunks por tick; com 213 chunks, uns 10
+    s no pior caso), e a luz de uma tocha perto da água em até ~2 s.

@@ -18,6 +18,7 @@ clientes em Java 8, a maioria com Angelica). Parte da expansão marítima: o
 ```bash
 ./gradlew spotlessApply build -x javadoc     # o spotless reformata: confira as substituições feitas por script
 ./gradlew :core:bench
+./gradlew clientBench    # o caminho do renderizador fora do jogo, antes e depois (ver docs/PLANO-DE-TESTES.md, 2b)
 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClient   # com run/client/oceanwaves-harness
 ```
 
@@ -59,9 +60,20 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClie
   dimensão só ao carregar e podem trocar de número a cada início. A configuração e a API (`dimensionOf`) vão por
   nome; o cliente aplica o mar ao mundo em que está, mandado pelo servidor a cada troca.
 * **Não conte com os avisos do mundo**: com o Celeritas o `markBlockRangeForRenderUpdate` não chega aos
-  `IWorldAccess` registrados. O cache confere por conta própria se um chunk chegou (`OceanChunks.arrived`) e relê em
-  rodízio.
-* Não quebrar o jogo: o renderizador desliga a si mesmo com um log se lançar exceção.
+  `IWorldAccess` registrados. O cache confere por conta própria se um chunk chegou (`OceanChunks.arrived`, por quadro,
+  só para os ainda não lidos) e relê em rodízio **no tick do cliente** (`OceanChunks.maintain`), não no quadro: a cor do
+  bioma e a profundidade não mudam entre dois quadros.
+* **A costa é refeita aos poucos e só troca quando as bordas concordam** (`ShoreScheduler`, `ShoreWindow`): uma mudança
+  marca os 5 × 5 chunks em volta; do mais perto, `desenho.costasPorQuadro` costas de verdade por quadro (janela de mar
+  aberto fundo é a sentinela `Attenuation.OPEN_SEA`, sem conta e sem orçamento); o chunk só passa a usar a costa nova se
+  nos vértices da aresta e do canto que divide com cada vizinho desenhado ela dá o mesmo valor (os que discordam trocam
+  juntos). Um chunk sem costa não é desenhado. `Column.shore` nunca é `null` depois de pronta (sem costa: `OPEN_SEA`).
+  Mexeu nisto: rode `ShoreSchedulerTest` e `ShoreWindowTest`, além dos testes de borda do core.
+* Não quebrar o jogo: o renderizador desliga a si mesmo com um log se lançar `RuntimeException` ou `LinkageError`, e a
+  face de cima da água do terreno **volta** (`RendererHealth`: o `hideTopFace` respeita a falha; a remontagem dos chunks
+  é feita pelo `ClientSea.tick`, nunca dentro do `catch`); o `Tessellator` aberto é fechado no `finally`. O F3 diz
+  "desligadas por erro". Uma mudança de nível do mar, de região ou de ligado remonta o terreno uma vez só por tick
+  (`RemountRequest`).
 * O que não foi verificado em jogo fica marcado **[a verificar]** nos documentos. O harness do ambiente de
   desenvolvimento roda sem GPU e sem o Angelica; o pack real (TEOF) e o servidor do Forbidden podem ser montados aqui
   como em `docs/TESTES-AMBIENTE-REAL.md` (o jar de teste com o harness: tirar o `exclude` do `shadowJar`, construir,
