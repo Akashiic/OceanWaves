@@ -311,4 +311,56 @@ class ShoreFieldTest {
             assertEquals(a.cornerAt(216, z), b.cornerAt(216, z), 0f, "z = " + z);
         }
     }
+
+    /**
+     * O contrato de {@code uniform()}: vale DENTRO da janela do campo. Fora dela {@code at} dá 0 (costa), mas o caminho
+     * uniforme não consulta {@code at}: a consulta do {@link OceanField} devolve a onda cheia (a mesma do mar aberto), e
+     * a amostra ainda grava {@code attenuation = 0}. Quem consulta pontos fora da janela de {@code OceanWaves.shore}
+     * (sempre pedida com a folga de {@code shoreMargin}) não pode contar com a atenuação; dentro, nada mudou.
+     */
+    @Test
+    void theUniformPathHoldsInsideTheWindowAndGivesTheFullWaveOutsideIt() {
+        WaveSet waves = Synthesis.build(SeaPresets.get("moderado"));
+        int w = 60, h = 60;
+        boolean[] open = new boolean[w * h];
+        float[] depth = new float[w * h];
+        Arrays.fill(open, true);
+        Arrays.fill(depth, 50);
+        ShoreField f = ShoreField.build(100, -40, w, h, open, depth, 10, 0.78, waves.significantHeight,
+            waves.lipschitz, waves.maxDisplacement);
+        assertTrue(f.uniform());
+        Attenuation slow = new Attenuation() {
+            @Override
+            public double at(double x, double z) {
+                return f.at(x, z);
+            }
+
+            @Override
+            public boolean uniform() {
+                return false;
+            }
+        };
+        OceanField fast = new OceanField(waves, f), ref = new OceanField(waves, slow), open0 = new OceanField(waves);
+        WaveSample a = new WaveSample(), b = new WaveSample(), c = new WaveSample();
+        double t = 12.34;
+        // dentro da janela: o mesmo que o caminho por ponto, e a atenuação gravada é 1
+        for (double[] p : new double[][] { { 100.5, -39.5 }, { 130, -10 }, { 159.25, 19.75 } }) {
+            fast.eulerian(p[0], p[1], t, waves.count, a, false);
+            ref.eulerian(p[0], p[1], t, waves.count, b, false);
+            assertEquals(1.0, a.attenuation, 0);
+            assertEquals(b.height, a.height, 1e-6);
+            assertEquals(b.dx, a.dx, 1e-6);
+            assertEquals(b.dz, a.dz, 1e-6);
+        }
+        // fora: at() = 0 e o caminho por ponto dá água parada; o uniforme dá a onda cheia do mar aberto
+        double x = 500, z = 500;
+        assertEquals(0.0, f.at(x, z), 0);
+        ref.eulerian(x, z, t, waves.count, b, false);
+        fast.eulerian(x, z, t, waves.count, a, false);
+        open0.eulerian(x, z, t, waves.count, c, false);
+        assertEquals(0.0, b.dx, 0, "o caminho por ponto: sem onda fora da janela");
+        assertEquals(c.height, a.height, 1e-9, "o caminho uniforme: a onda cheia");
+        assertEquals(c.dx, a.dx, 1e-9);
+        assertEquals(0.0, a.attenuation, 0, "a amostra grava o at() de fora da janela");
+    }
 }

@@ -253,7 +253,10 @@ public final class ShoreField implements Attenuation {
     /**
      * Sem costa na região (todos os cantos valem 1): quem avalia a superfície pode pular a atenuação, ponto a ponto,
      * e usar o caminho de mar aberto. Vale dentro da região; o que o desenho pede fica sempre dentro dela (o chunk e a
-     * folga em volta). Fora, {@link #at} dá 0 e este caminho dá 1.
+     * folga em volta). Fora, {@link #at} dá 0 e este caminho dá 1: uma consulta do {@link OceanField} (ou do
+     * {@link GridEvaluator}) a um ponto fora da janela de um campo uniforme devolve a onda cheia, e não a água parada que
+     * o {@code at} sugere, e a amostra ainda grava {@code attenuation = 0}. Quem consulta a partir de uma janela pedida
+     * com a folga de {@code OceanWaves.shoreMargin} (o contrato de {@code OceanWaves.shore}) nunca chega lá.
      */
     @Override
     public boolean uniform() {
