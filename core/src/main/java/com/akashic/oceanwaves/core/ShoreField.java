@@ -26,6 +26,11 @@ public final class ShoreField implements Attenuation {
     public final int height;
     /** (w+1) × (h+1) valores nos cantos, linha a linha. */
     private final float[] corner;
+    /** Todos os cantos valem exatamente 1: mar aberto e fundo, sem costa nenhuma na região. */
+    private final boolean allOne;
+
+    /** Valores a partir daqui contam como 1: o par log/exp do limite de gradiente devolve 0,99999994 em vez de 1. */
+    private static final float ROUND_UP = 1 - 1e-6f;
 
     private ShoreField(int originX, int originZ, int width, int height, float[] corner) {
         this.originX = originX;
@@ -33,6 +38,14 @@ public final class ShoreField implements Attenuation {
         this.width = width;
         this.height = height;
         this.corner = corner;
+        boolean one = true;
+        for (float v : corner) {
+            if (v != 1f) {
+                one = false;
+                break;
+            }
+        }
+        this.allOne = one;
     }
 
     /**
@@ -107,6 +120,13 @@ public final class ShoreField implements Attenuation {
             lipschitzClamp(out, cw, ch, 1 / (1.5 * maxDisplacement * Math.sqrt(2)));
             for (int i = 0; i < out.length; i++) {
                 out[i] = (float) Math.min(1, (1 - Math.exp(-l * out[i])) / l);
+            }
+        }
+        // o que ficou a menos de 1e-6 do mar aberto vale 1 de verdade: a região só é "uniforme" (caminho barato do
+        // GridEvaluator) se for exatamente 1, e dois pedaços vizinhos têm de concordar sobre isso na borda comum
+        for (int i = 0; i < out.length; i++) {
+            if (out[i] >= ROUND_UP) {
+                out[i] = 1f;
             }
         }
         return new ShoreField(originX, originZ, w, h, out);
@@ -228,6 +248,16 @@ public final class ShoreField implements Attenuation {
             double dq = q - v[k];
             d[q] = dq * dq + f[v[k]];
         }
+    }
+
+    /**
+     * Sem costa na região (todos os cantos valem 1): quem avalia a superfície pode pular a atenuação, ponto a ponto,
+     * e usar o caminho de mar aberto. Vale dentro da região; o que o desenho pede fica sempre dentro dela (o chunk e a
+     * folga em volta). Fora, {@link #at} dá 0 e este caminho dá 1.
+     */
+    @Override
+    public boolean uniform() {
+        return allOne;
     }
 
     /** O valor num canto de bloco (coordenadas de mundo inteiras). Fora da região: 0. */

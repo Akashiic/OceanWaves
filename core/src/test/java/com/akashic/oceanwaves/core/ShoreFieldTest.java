@@ -1,6 +1,7 @@
 package com.akashic.oceanwaves.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -196,5 +197,118 @@ class ShoreFieldTest {
             }
         }
         return ShoreField.build(cx - margin, cz - margin, w, w, o, d, width, 0.78, waves.significantHeight, l, m);
+    }
+
+    /** PERF-3: sem costa na região todos os cantos valem exatamente 1 e o campo é "uniforme" (caminho barato da grade). */
+    @Test
+    void anOpenDeepRegionIsUniformAndExactlyOne() {
+        WaveSet waves = Synthesis.build(SeaPresets.get("tempestade").withChoppiness(1));
+        int w = 60, h = 60;
+        boolean[] open = new boolean[w * h];
+        float[] depth = new float[w * h];
+        Arrays.fill(open, true);
+        Arrays.fill(depth, 40);
+        // com o limite de gradiente (o par log/exp pode dar 0,99999994) e sem ele
+        ShoreField a = ShoreField.build(5, -7, w, h, open, depth, 10, 0.78, waves.significantHeight, waves.lipschitz,
+            waves.maxDisplacement);
+        ShoreField b = ShoreField.build(5, -7, w, h, open, depth, 10, 0.78, waves.significantHeight);
+        for (ShoreField f : new ShoreField[] { a, b }) {
+            assertTrue(f.uniform());
+            for (int z = -7; z <= -7 + h; z++) {
+                for (int x = 5; x <= 5 + w; x++) {
+                    assertEquals(1f, f.cornerAt(x, z), 0f);
+                }
+            }
+        }
+    }
+
+    @Test
+    void aRegionWithCoastOrShoalsIsNotUniform() {
+        int w = 60, h = 60;
+        boolean[] open = new boolean[w * h];
+        float[] depth = new float[w * h];
+        Arrays.fill(open, true);
+        Arrays.fill(depth, 40);
+        ShoreField deep = ShoreField.build(0, 0, w, h, open, depth, 10, 0.78, 2);
+        assertTrue(deep.uniform());
+        open[30 * w + 30] = false; // um bloco de terra
+        assertFalse(ShoreField.build(0, 0, w, h, open, depth, 10, 0.78, 2).uniform());
+        open[30 * w + 30] = true;
+        Arrays.fill(depth, 1f); // fundo raso em tudo: a onda quebra
+        assertFalse(ShoreField.build(0, 0, w, h, open, depth, 10, 0.78, 2).uniform());
+    }
+
+    /** O caminho uniforme dá a mesma superfície que o caminho por ponto, num campo todo 1. */
+    @Test
+    void theUniformPathGivesTheSameSurfaceAsTheSlowOne() {
+        WaveSet waves = Synthesis.build(SeaPresets.get("moderado"));
+        int m = (int) Math.ceil(ShoreField.influenceRadius(10, waves.lipschitz, waves.maxDisplacement)) + 1;
+        int size = 16 + 2 * m;
+        boolean[] open = new boolean[size * size];
+        float[] depth = new float[size * size];
+        Arrays.fill(open, true);
+        Arrays.fill(depth, 50);
+        ShoreField f = ShoreField.build(-m, -m, size, size, open, depth, 10, 0.78, waves.significantHeight,
+            waves.lipschitz, waves.maxDisplacement);
+        assertTrue(f.uniform());
+        Attenuation slow = new Attenuation() {
+            @Override
+            public double at(double x, double z) {
+                return f.at(x, z);
+            }
+
+            @Override
+            public boolean uniform() {
+                return false;
+            }
+        };
+        GridEvaluator g = new GridEvaluator(waves);
+        GridOutput fast = new GridOutput(), ref = new GridOutput();
+        SpectralLod lod = SpectralLod.at(40, 70, 40, 63);
+        double worst = 0;
+        for (double spacing : new double[] { 0.5, 1, 2, 4 }) {
+            int n = (int) Math.round(16 / spacing) + 1;
+            g.evaluateFast(0, 0, spacing, n, 3.3, lod, f, fast);
+            g.evaluateFast(0, 0, spacing, n, 3.3, lod, slow, ref);
+            for (int i = 0; i < n * n; i++) {
+                worst = Math.max(worst, Math.abs(fast.x[i] - ref.x[i]));
+                worst = Math.max(worst, Math.abs(fast.y[i] - ref.y[i]));
+                worst = Math.max(worst, Math.abs(fast.z[i] - ref.z[i]));
+                worst = Math.max(worst, Math.abs(fast.nx[i] - ref.nx[i]));
+                worst = Math.max(worst, Math.abs(fast.ny[i] - ref.ny[i]));
+                worst = Math.max(worst, Math.abs(fast.nz[i] - ref.nz[i]));
+            }
+        }
+        assertEquals(0, worst, 1e-6);
+    }
+
+    /**
+     * Um chunk de janela uniforme (a ilha está além da folga dele) e o vizinho, de janela calculada (a ilha está nela),
+     * dão exatamente 1 na borda que dividem: sem fresta entre o caminho uniforme e o calculado.
+     */
+    @Test
+    void aUniformChunkAndAComputedNeighbourAgreeExactlyOnTheirEdge() {
+        WaveSet waves = Synthesis.build(SeaPresets.get("tempestade").withChoppiness(1));
+        double width = 10, l = waves.lipschitz, mx = waves.maxDisplacement;
+        int margin = (int) Math.ceil(ShoreField.influenceRadius(width, l, mx)) + 1;
+        int size = 600;
+        boolean[] open = new boolean[size * size];
+        float[] depth = new float[size * size];
+        Arrays.fill(open, true);
+        Arrays.fill(depth, 40);
+        // ilha a 8 blocos além da folga da janela do chunk A (x 200..216), a leste do chunk B (x 216..232)
+        int islandX = 216 + 16 + margin + 8 - 16;
+        for (int z = 300; z < 303; z++) {
+            for (int x = islandX; x < islandX + 3; x++) {
+                open[z * size + x] = false;
+            }
+        }
+        ShoreField a = region(open, depth, size, 200, 296, margin, width, l, mx, waves);
+        ShoreField b = region(open, depth, size, 216, 296, margin, width, l, mx, waves);
+        assertTrue(a.uniform(), "o chunk A não vê a ilha");
+        assertFalse(b.uniform(), "o chunk B vê a ilha");
+        for (int z = 296; z <= 312; z++) {
+            assertEquals(a.cornerAt(216, z), b.cornerAt(216, z), 0f, "z = " + z);
+        }
     }
 }
