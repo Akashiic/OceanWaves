@@ -49,6 +49,9 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClie
   `mc_Entity` (`IrisBridge`, por reflexão). O Angelica reescreve o `sortAndRender` e fecha a fase no fim: nada que
   dependa da fase pode ser desenhado depois dele sem o override. Com shaderpack o frustum vanilla não serve (use o
   `ViewCone`) e a passagem de sombra também chama o passe 1 (`ShaderPacks.renderingShadowPass`).
+* **A textura do mar é a da água dos chunks** (`WaterTexture.stillIcon`): com o Neo States, o sprite cinza dele
+  (`GrayWater.icon`, por reflexão), porque fora da montagem de chunks o bloco devolve o azul do vanilla e a cor do bioma
+  do 1.21.1 sobre ele escurece o mar. Mudou a cor ou a textura do mar: compare com `/ondas desligar` no mesmo lugar.
 * **Cada mundo tem o seu nível do mar** (`ServerSea.seaLevel(dim)`, `OceanWaves.restLevel(dim)`, na mensagem aos
   clientes): o spawn do TEOF tem a água em y 30 (nível 31), não 63. Nada de `OceanConfig.seaLevel` direto fora do
   `ServerSea` e do modo local do cliente.

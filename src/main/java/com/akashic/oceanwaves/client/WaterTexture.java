@@ -1,5 +1,9 @@
 package com.akashic.oceanwaves.client;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.init.Blocks;
@@ -29,8 +33,45 @@ final class WaterTexture {
         return tint;
     }
 
+    /** {@code com.akashic.neostates.client.GrayWater.icon(int)}, ou null sem o Neo States. */
+    private static MethodHandle neoStatesIcon;
+    private static boolean lookedUp;
+
+    /**
+     * O sprite da água parada que os chunks usam. O Neo States só troca o ícone da água pelo dele (cinza, para a cor
+     * do bioma do 1.21.1 ser a cor inteira) enquanto um chunk é montado ({@code getWorldRenderPass() >= 0}); fora
+     * disso entrega o azul do vanilla. O mar é desenhado fora dessa montagem: perguntando ao bloco, vinha o azul, que
+     * vezes a cor azul do bioma do Neo States dava a água escura e com a textura antiga (relatado no spawn do TEOF;
+     * nas fotos do cais, a água desenhada pelo vanilla ficava mais clara que a do mar). Com o Neo States, o sprite
+     * vem dele, pela mesma função que o mixin dele usa (que respeita a configuração e se a textura carregou).
+     */
+    static IIcon stillIcon() {
+        if (!lookedUp) {
+            lookedUp = true;
+            try {
+                Class<?> c = Class.forName("com.akashic.neostates.client.GrayWater");
+                neoStatesIcon = MethodHandles.publicLookup()
+                    .findStatic(c, "icon", MethodType.methodType(IIcon.class, int.class));
+            } catch (ReflectiveOperationException | LinkageError e) {
+                neoStatesIcon = null;
+            }
+        }
+        MethodHandle h = neoStatesIcon;
+        if (h != null) {
+            try {
+                IIcon icon = (IIcon) h.invokeExact(1);
+                if (icon != null) {
+                    return icon;
+                }
+            } catch (Throwable e) {
+                neoStatesIcon = null;
+            }
+        }
+        return Blocks.water.getIcon(1, 0);
+    }
+
     void bind() {
-        IIcon icon = Blocks.water.getIcon(1, 0);
+        IIcon icon = stillIcon();
         if (!(icon instanceof TextureAtlasSprite)) {
             return;
         }

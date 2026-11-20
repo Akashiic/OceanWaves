@@ -146,6 +146,23 @@ medido pelo servidor em volta do spawn. Teste com o mundo de verdade e o `oceanw
    depois; a faixa escura colada às lajes e ao longo dos tijolos sumiu):
 
    ![Cais de lajes: antes e depois](img/real/cais-manchas-antes-depois.jpg)
+5. **Com o Neo States, o mar escuro e com a textura antiga** (relatado no spawn do TEOF). O Neo States só troca o ícone
+   da água pelo cinza dele enquanto um chunk é montado (`ForgeHooksClient.getWorldRenderPass() >= 0`); o mar é desenhado
+   fora disso, e `Blocks.water.getIcon` entregava o azul do vanilla. A cor do bioma (a do 1.21.1, que o Neo States manda
+   pelo `BiomeEvent.GetWaterColor`) vezes uma textura que já era azul: azul ao quadrado. Correção: com o Neo States, o
+   sprite vem de `GrayWater.icon(1)`, a mesma função do mixin dele (`WaterTexture.stillIcon`, por reflexão). No cais de
+   lajes do `Akashic/Spawn`, Neo States `alpha.10` com o Angelica, média de 13 × 13 px:
+
+   | | água funda | água rasa |
+   |---|---|---|
+   | antes | (12, 24, 97) | (50, 71, 185) |
+   | depois | (36, 63, 116) | (76, 112, 182) |
+   | Neo States sem ondas (`/ondas desligar`) | (31, 52, 94) | (80, 115, 182) |
+
+   A faixa clara em degraus no meio do canal é água rasa, igual sem as ondas. O que sobra de mais claro na água funda é
+   o reflexo do céu da superfície do OceanWaves. De cima para baixo: antes, depois, o Neo States sem ondas:
+
+   ![O mar com o Neo States: antes, depois e sem ondas](img/real/neostates-mar-tres.jpg)
 
 ## Shaderpacks: BSL e Complementary — integrados
 
