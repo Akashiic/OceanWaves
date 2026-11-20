@@ -19,7 +19,7 @@ não as construiu).
 | 1 | Auditoria sem alterar código → `DIAGNOSTICO.md` | **feita**: 8 frentes (`docs/auditoria/`), 32 achados graves revistos por céticos que não os escreveram, nenhum refutado por inteiro, 25 correções aplicadas |
 | 2 | Linha de base de FPS (medida pelo usuário: roteiro no `DIAGNOSTICO.md`) | **aguardando os números do usuário**; jar `c56f672` entregue |
 | 3 | Priorização das correções | **feita**: `DIAGNOSTICO.md` §4 e as decisões do engenheiro-chefe |
-| 4 | Correções, cada uma compilada, testada e revisada | pendente |
+| 4 | Correções, cada uma compilada, testada e revisada | **em andamento**: leva A (falhas graves do cliente e cortes de FPS; amostrador da superfície com cinemática; detecção segura no Expeditions) |
 | 5 | Meta: barco/fragata seguem altura e inclinação da onda, FPS ≥ 90% da linha de base | pendente |
 
 ## Registro das entregas
@@ -32,5 +32,6 @@ não as construiu).
 ## Pendências
 
 * Etapa 2: os números de FPS (i) sem o OceanWaves e (ii) com o `c56f672`, medidos pelo usuário.
-* Etapa 4 inteira (as correções).
+* Etapa 4: leva A em andamento. Depois dela: leva B (pressão no casco e corpo de 6 graus da fragata, casco = ficha,
+  previsão no Kunftig, barco do Et Futurum, Neo States API 5, malha em threads) e leva C (visual).
 * Pergunta ao usuário: a escala de Froude 0,5 do mar com o navio a 1 bloco = 1 m é intencional? (`DIAGNOSTICO.md` §5, 6)
