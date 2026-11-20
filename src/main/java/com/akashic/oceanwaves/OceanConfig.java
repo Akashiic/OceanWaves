@@ -62,8 +62,17 @@ public final class OceanConfig {
     public static boolean specular = true;
     public static double relief = 2.0;
     public static boolean edgeFade = true;
-    public static boolean waterShadows = true;
+    /** Com shaderpack: o mar entra no mapa de sombra. Desligado por padrão (custa vértices demais no Tessellator). */
+    public static boolean waterShadows = false;
     public static int rebuildsPerFrame = 6;
+    /** Espaçamento mínimo da malha com um shaderpack ligado: o pack põe o detalhe por pixel, e cada vértice custa. */
+    public static double shaderMinSpacing = 2.0;
+    /** Costas de verdade refeitas por quadro (as janelas de mar aberto fundo não contam). */
+    public static int shoresPerFrame = 2;
+    /** Chunks de mar relidos por inteiro por tick do cliente (rodízio; 20 vezes por segundo). */
+    public static int rereadPerTick = 2;
+    /** Chunks de mar com a luz relida por tick do cliente (rodízio). */
+    public static int lightPerTick = 4;
 
     private OceanConfig() {}
 
@@ -200,15 +209,52 @@ public final class OceanConfig {
             edgeFade,
             "As ondas morrem nos últimos chunks do alcance (encontram a água plana do Mirai/Distant Horizons sem degrau)")
             .getBoolean();
+        // a chave antiga (padrão ligado) ficou gravada nos arquivos já escritos: a nova vale o padrão novo
+        c.getCategory(r)
+            .remove("sombraDaAgua");
         waterShadows = c
             .get(
                 r,
-                "sombraDaAgua",
+                "sombraDaAguaComShader",
                 waterShadows,
-                "Com shaderpack: o mar entra no mapa de sombra (sombra colorida e cáusticas embaixo d'água)")
+                "Com shaderpack: o mar entra no mapa de sombra (sombra colorida e cáusticas embaixo d'água). "
+                    + "Desligado por padrão: repete a malha do mar inteira, sem recorte, só para o mapa de sombra")
             .getBoolean();
         rebuildsPerFrame = c.get(r, "chunksPorQuadro", rebuildsPerFrame, "Chunks de mar relidos por quadro")
             .getInt();
+        shaderMinSpacing = c
+            .get(
+                r,
+                "espacamentoComShader",
+                shaderMinSpacing,
+                "Espaçamento mínimo da malha com um shaderpack ligado, blocos (1, 2, 4...; vale o maior entre este e "
+                    + "'espacamento'). O pack põe o detalhe por pixel, e com ele cada vértice custa caro")
+            .getDouble();
+        // a malha só tem espaçamentos que são potência de 2 (0,5 a 16)
+        shaderMinSpacing = Math
+            .pow(2, Math.round(Math.log(Math.max(0.5, Math.min(16, shaderMinSpacing))) / Math.log(2)));
+        shoresPerFrame = c
+            .get(
+                r,
+                "costasPorQuadro",
+                shoresPerFrame,
+                "Costas de verdade refeitas por quadro (a atenuação das ondas perto da terra; cada uma custa de 0,2 a "
+                    + "0,5 ms medidos fora do jogo); mar aberto fundo não conta. Mais: o mar novo aparece antes, com "
+                    + "picos maiores")
+            .getInt();
+        shoresPerFrame = Math.max(1, shoresPerFrame);
+        rereadPerTick = c
+            .get(
+                r,
+                "relerPorTick",
+                rereadPerTick,
+                "Chunks de mar relidos por inteiro a cada tick (20 por segundo), em rodízio: pega mudanças cujo aviso "
+                    + "se perdeu")
+            .getInt();
+        rereadPerTick = Math.max(0, rereadPerTick);
+        lightPerTick = c.get(r, "luzPorTick", lightPerTick, "Chunks de mar com a luz relida a cada tick, em rodízio")
+            .getInt();
+        lightPerTick = Math.max(0, lightPerTick);
         if (c.hasChanged()) {
             c.save();
         }

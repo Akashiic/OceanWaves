@@ -31,7 +31,7 @@ final class EdgeFade implements Attenuation {
         start = end - width;
     }
 
-    /** A atenuação deste chunk, com a faixa da borda se ele a toca (null: mar aberto). */
+    /** A atenuação deste chunk, com a faixa da borda se ele a toca ({@link Attenuation#OPEN_SEA}: mar aberto). */
     Attenuation around(Attenuation chunk, double x0, double z0) {
         // o canto mais longe do chunk ainda dentro da parte cheia: sem faixa
         double far = Math.sqrt(sq(Math.abs(x0 + 8 - cx) + 8) + sq(Math.abs(z0 + 8 - cz) + 8));

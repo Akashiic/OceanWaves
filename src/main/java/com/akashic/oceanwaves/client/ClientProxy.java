@@ -56,6 +56,8 @@ public final class ClientProxy extends CommonProxy {
             OceanRenderer.INSTANCE.onWorldChange();
         }
         ClientSea.tick(mc);
+        // a releitura em rodízio dos chunks de mar (antes por quadro) roda aqui, 20 vezes por segundo
+        OceanRenderer.INSTANCE.tick(mc);
     }
 
     @SubscribeEvent
