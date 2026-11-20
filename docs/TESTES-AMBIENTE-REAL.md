@@ -136,6 +136,16 @@ medido pelo servidor em volta do spawn. Teste com o mundo de verdade e o `oceanw
 3. Com shaderpack, por suspeita (não confirmada): o recorte por campo de visão usava o frustum vanilla, que o Iris pode
    não atualizar para a câmera, e o mar podia rodar também na passagem de sombra. Agora pula a sombra
    (`IrisApi.isRenderingShadowPass`) e não usa o frustum vanilla com shaderpack. A imagem com o BSL não mudou (abaixo).
+4. **Manchas escuras na água que termina num bloco** (relatado num cais do spawn do TEOF). Cada vértice da malha lê a
+   cor e a luz da coluna em cujo canto está (a de índice `(int) u`), e os vértices da borda +x e +z de uma coluna de mar
+   leem a vizinha. Quando ela é terra ou bloco (a laje do cais), a cor e a luz dela nunca eram lidas: valiam 0 (preto,
+   luz nenhuma), e o preto se espalhava pelo triângulo, só nos lados +x e +z da água. Correção: as colunas fechadas
+   ganham a luz mais clara das colunas de mar vizinhas (céu e tochas em separado; sem vizinha no chunk, a do bloco acima)
+   e a cor da água do bioma (`OceanChunks.fillClosed`). Visto corrigido no `Akashic/Spawn` real, no cais de lajes duplas
+   em (101 a 106, 15) e no de tijolo em (67 a 77, −75 a −65), cliente TEOF com o Angelica (em cima antes, embaixo
+   depois; a faixa escura colada às lajes e ao longo dos tijolos sumiu):
+
+   ![Cais de lajes: antes e depois](img/real/cais-manchas-antes-depois.jpg)
 
 ## Shaderpacks: BSL e Complementary — integrados
 

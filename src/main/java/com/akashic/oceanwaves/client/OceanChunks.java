@@ -177,6 +177,7 @@ final class OceanChunks implements IWorldAccess {
                 }
             }
         }
+        fillClosed(c, w, y, true);
         if (neighbours) {
             markShores(c);
         }
@@ -206,6 +207,49 @@ final class OceanChunks implements IWorldAccess {
         for (int i = 0; i < 256; i++) {
             if (c.open[i]) {
                 c.light[i] = w.getLightBrightnessForSkyBlocks(bx + (i & 15), y + 1, bz + (i >> 4), 0);
+            }
+        }
+        fillClosed(c, w, y, false);
+    }
+
+    /**
+     * A cor e a luz das colunas que não são de mar. Cada vértice da malha lê a coluna em cujo canto está (a de índice
+     * {@code (int) u}): os vértices da borda +x e +z de uma coluna de mar leem a vizinha. Se ela é terra ou um bloco
+     * (a laje de um cais), sem isto valia 0: cor preta e luz nenhuma, e o preto se espalhava pelo triângulo (manchas
+     * escuras na água junto aos blocos, vistas no spawn do TEOF). Vale a luz mais clara das colunas de mar vizinhas
+     * (céu e tochas em separado), ou a de um bloco acima, e a cor da água do bioma, que não depende do bloco.
+     */
+    private static void fillClosed(Column c, World w, int y, boolean colors) {
+        int bx = c.cx << 4, bz = c.cz << 4;
+        for (int z = 0; z < 16; z++) {
+            for (int x = 0; x < 16; x++) {
+                int i = z * 16 + x;
+                if (c.open[i]) {
+                    continue;
+                }
+                int sky = -1, block = 0;
+                for (int dz = -1; dz <= 1; dz++) {
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int nx = x + dx, nz = z + dz;
+                        if (nx < 0 || nz < 0 || nx > 15 || nz > 15 || !c.open[nz * 16 + nx]) {
+                            continue;
+                        }
+                        int l = c.light[nz * 16 + nx];
+                        sky = Math.max(sky, l >> 20 & 15);
+                        block = Math.max(block, l >> 4 & 15);
+                    }
+                }
+                int wx = bx + x, wz = bz + z;
+                if (sky < 0) {
+                    int a = w.getLightBrightnessForSkyBlocks(wx, y + 1, wz, 0);
+                    int b = w.getLightBrightnessForSkyBlocks(wx, y + 2, wz, 0);
+                    sky = Math.max(a >> 20 & 15, b >> 20 & 15);
+                    block = Math.max(a >> 4 & 15, b >> 4 & 15);
+                }
+                c.light[i] = sky << 20 | block << 4;
+                if (colors) {
+                    c.color[i] = Blocks.water.colorMultiplier(w, wx, y, wz);
+                }
             }
         }
     }
