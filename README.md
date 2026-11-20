@@ -37,7 +37,7 @@ O que ainda não tem, e a comparação com o oceano do Physics Mod: [docs/PESQUI
 
 | Parte | Estado |
 |---|---|
-| Núcleo matemático (`core/`) | feito, 40 testes, conferido no Java 8 e no 21 |
+| Núcleo matemático (`core/`) | feito, 47 testes, conferido no Java 8 e no 21; o cliente tem os próprios testes sem Minecraft (`src/test`) |
 | Mod: estado do mar no servidor, rede, `/ondas`, API | feito; **visto no servidor do Forbidden** (Crucible, 226 mods) e a API chamada de um plugin Bukkit ([relatório](docs/TESTES-AMBIENTE-REAL.md)) |
 | Desenho da superfície, face vanilla escondida, costa, luz | feito; **visto no cliente TEOF 6.3** (Angelica 2.2.43 sem shader, Neo States, 218 mods) |
 | Multijogador: o mesmo mar e o mesmo relógio | **visto**: cliente TEOF no Crucible, resumo das ondas igual nos dois lados, relógio assentando em 20 TPS |
@@ -77,14 +77,24 @@ ondas; `/ondas ligar`/`desligar` valem até o servidor reiniciar.
 `spawn` ou `ponto` as limita a um círculo (`raio`, `x`, `z`). A borda do círculo é tratada como costa: a atenuação
 cai até zero nela pelo mesmo limite de gradiente da costa, então a superfície nunca dobra nem dá degrau.
 
-F3 mostra o estado, o custo por quadro e o relógio. Chaves: `-Doceanwaves.disable=true` (mod inerte no cliente),
-`-Doceanwaves.topFace.disable=true` (a face vanilla volta, para depurar).
+F3 mostra o estado, o custo por quadro e o relógio (e "desligadas por erro" se o desenho falhou: a água do terreno
+volta e o mar só religa ao trocar de mundo). Chaves: `-Doceanwaves.disable=true` (mod inerte no cliente),
+`-Doceanwaves.topFace.disable=true` (a face vanilla volta, para depurar), `-Doceanwaves.failRenderAt=N` (o desenho
+lança uma exceção no N-ésimo quadro, para ver a falha acima).
+
+**Desenho (`config/oceanwaves.cfg`, categoria `desenho`, só do cliente).** Com shaderpack o mar usa padrões próprios,
+porque ali cada vértice custa caro e o pack põe o detalhe por pixel: `espacamentoComShader` (2: o espaçamento mínimo da
+malha, vale o maior entre ele e `espacamento`) e `sombraDaAguaComShader` (desligada: o mar não entra no mapa de
+sombra; a chave `sombraDaAgua` antiga, que valia ligada, foi trocada por esta). `costasPorQuadro` (2) é quantas
+costas de verdade (a atenuação das ondas perto da terra) o cliente refaz por quadro, e `relerPorTick` (2) e
+`luzPorTick` (4) quantos chunks de mar ele relê, em rodízio, a cada tick: o que antes era feito todo quadro.
 
 ## Build
 
 ```bash
 ./gradlew spotlessApply build -x javadoc      # núcleo + mod + testes; se o Maven Central der 429, --max-workers=1
 ./gradlew :core:bench                         # medidas do núcleo
+./gradlew clientBench                         # o caminho do renderizador fora do jogo (antes e depois)
 ```
 
 Harness visual (cliente de desenvolvimento, mundo plano de oceano, capturas e medidas):

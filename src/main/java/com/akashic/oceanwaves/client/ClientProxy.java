@@ -56,6 +56,8 @@ public final class ClientProxy extends CommonProxy {
             OceanRenderer.INSTANCE.onWorldChange();
         }
         ClientSea.tick(mc);
+        // a releitura em rodízio dos chunks de mar (antes por quadro) roda aqui, 20 vezes por segundo
+        OceanRenderer.INSTANCE.tick(mc);
     }
 
     @SubscribeEvent
@@ -70,6 +72,10 @@ public final class ClientProxy extends CommonProxy {
     public void onDebugText(RenderGameOverlayEvent.Text e) {
         Minecraft mc = Minecraft.getMinecraft();
         if (!mc.gameSettings.showDebugInfo) {
+            return;
+        }
+        if (ClientSea.rendererFailed()) {
+            e.left.add("[Ondas] desligadas por erro: " + ClientSea.rendererFailure() + " (ver o log)");
             return;
         }
         if (!ClientSea.active()) {

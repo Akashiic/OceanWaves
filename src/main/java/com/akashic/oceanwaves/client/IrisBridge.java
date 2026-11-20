@@ -70,15 +70,24 @@ final class IrisBridge {
     }
 
     private static Method currentPhase;
+    private static boolean phaseLooked;
 
-    /** A fase atual do Iris (diagnóstico), ou "-" sem o Iris. */
+    /** A fase atual do Iris (diagnóstico), ou "-" sem o Iris. A busca é feita uma vez: sem o Iris não lança nada. */
     static String phase() {
         resolve();
-        try {
-            if (currentPhase == null) {
+        if (!phaseLooked) {
+            phaseLooked = true;
+            try {
                 currentPhase = Class.forName("net.coderbot.iris.layer.GbufferPrograms")
                     .getMethod("getCurrentPhase");
+            } catch (ReflectiveOperationException | LinkageError e) {
+                currentPhase = null;
             }
+        }
+        if (currentPhase == null) {
+            return "-";
+        }
+        try {
             return String.valueOf(currentPhase.invoke(null));
         } catch (ReflectiveOperationException | LinkageError | RuntimeException e) {
             return "-";

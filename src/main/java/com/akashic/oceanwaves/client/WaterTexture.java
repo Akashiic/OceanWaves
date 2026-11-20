@@ -26,6 +26,8 @@ final class WaterTexture {
     private int height;
     private int frame = -1;
     private TextureAtlasSprite sprite;
+    private float[] lumBuffer = new float[0];
+    private int[] outBuffer = new int[0];
     /** O tom médio da textura (RGB 0 a 1), que a cor do vértice leva no lugar dela. */
     private final float[] tint = { 0.25f, 0.35f, 0.85f };
 
@@ -105,7 +107,12 @@ final class WaterTexture {
      */
     private int[] luminance(int[] argb, int n) {
         double r = 0, g = 0, b = 0, max = 1e-6;
-        float[] lum = new float[n];
+        // os vetores ficam guardados: a animação troca de quadro uns 10 vezes por segundo, e o upload copia os dados
+        if (lumBuffer.length < n) {
+            lumBuffer = new float[n];
+            outBuffer = new int[n];
+        }
+        float[] lum = lumBuffer;
         for (int i = 0; i < n; i++) {
             int p = argb[i];
             float pr = (p >> 16 & 255) / 255f, pg = (p >> 8 & 255) / 255f, pb = (p & 255) / 255f;
@@ -124,7 +131,7 @@ final class WaterTexture {
         tint[0] = (float) Math.min(1, r * k);
         tint[1] = (float) Math.min(1, g * k);
         tint[2] = (float) Math.min(1, b * k);
-        int[] out = new int[n];
+        int[] out = outBuffer;
         for (int i = 0; i < n; i++) {
             int v = Math.min(255, Math.round(lum[i] / (float) max * 255));
             out[i] = 0xFF000000 | v << 16 | v << 8 | v;
